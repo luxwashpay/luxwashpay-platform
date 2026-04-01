@@ -58,3 +58,4 @@ This project now uses a real backend flow:
   - `STRIPE_CONNECT_ACCOUNT_ID=acct_...` (connected account for the car wash)
   - `PLATFORM_FEE_PENCE=50`
 # LuxWash-1
+# LuxWash-1
