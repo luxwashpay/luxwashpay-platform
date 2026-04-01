@@ -228,6 +228,55 @@
       color: #ce1126;
       background: rgba(206, 17, 38, 0.1);
     }
+    .bonus-wrap {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid #1b1b1b;
+      background: rgba(255,255,255,0.02);
+    }
+    .bonus-title {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #666;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .bonus-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .bonus-btn {
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid #2a2a2a;
+      background: #101010;
+      color: #c9c9c9;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .bonus-btn.on {
+      border-color: #0fbf75;
+      color: #0fbf75;
+      background: rgba(15,191,117,0.12);
+    }
+    .bonus-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+    }
+    .bonus-msg {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #a8a8a8;
+      text-align: center;
+    }
     .status {
       margin: 2px 0 12px;
       min-height: 18px;
@@ -453,6 +502,14 @@
             <button class="pre" onclick="setAmt(20)">&pound;20</button>
           </div>
 
+          <div class="bonus-wrap">
+            <div class="bonus-title">Bonus Packs (extra credit)</div>
+            <div class="bonus-row" id="bonus-row"></div>
+            <div class="bonus-note">Limited time offer • Bonus varies by pack</div>
+          </div>
+
+          <div class="bonus-msg" id="bonus-msg"></div>
+
           <p class="bay-msg" id="bay-msg"></p>
           <p class="status" id="status-msg"></p>
 
@@ -504,9 +561,16 @@
       : "";
     var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://localhost:3000";
     var amt = 2;
+    var creditAmt = 2;
     var isBusy = false;
     var selectedBoxNum = null;
     var presetValues = [2, 3, 5, 10, 20];
+    var bonusPacks = [
+      { pay: 6, credit: 7 },
+      { pay: 10, credit: 11 },
+      { pay: 20, credit: 23 }
+    ];
+    var selectedBonusIndex = -1;
 
     function setStatus(message, type) {
       var el = document.getElementById("status-msg");
@@ -524,11 +588,21 @@
         btn.classList.toggle("on", presetValues[index] === amt);
         btn.disabled = isBusy;
       });
+      document.querySelectorAll(".bonus-btn").forEach(function (btn, index) {
+        btn.classList.toggle("on", index === selectedBonusIndex);
+        btn.disabled = isBusy;
+      });
     }
 
     function ui() {
       document.getElementById("amt-num").innerHTML = "&pound;" + amt;
       document.getElementById("topupbtn").textContent = "TOP UP \u00a3" + amt.toFixed(2);
+      var bonusMsg = document.getElementById("bonus-msg");
+      if (creditAmt > amt) {
+        bonusMsg.textContent = "You pay £" + amt.toFixed(2) + " and get £" + creditAmt.toFixed(2) + " credit (+" + (creditAmt - amt).toFixed(2) + " bonus)";
+      } else {
+        bonusMsg.textContent = "";
+      }
       syncAmountControls();
     }
 
@@ -555,6 +629,8 @@
         return;
       }
       amt = Math.min(50, Math.max(1, amt + delta));
+      creditAmt = amt;
+      selectedBonusIndex = -1;
       ui();
     }
 
@@ -563,6 +639,22 @@
         return;
       }
       amt = value;
+      creditAmt = amt;
+      selectedBonusIndex = -1;
+      ui();
+    }
+
+    function setBonus(index) {
+      if (isBusy) {
+        return;
+      }
+      var pack = bonusPacks[index];
+      if (!pack) {
+        return;
+      }
+      selectedBonusIndex = index;
+      amt = pack.pay;
+      creditAmt = pack.credit;
       ui();
     }
 
@@ -609,6 +701,9 @@
 
       try {
         var requestBody = { amount: amt };
+        if (creditAmt > amt) {
+          requestBody.creditAmount = creditAmt;
+        }
         if (selectedBoxNum) {
           requestBody.boxNum = selectedBoxNum;
         }
@@ -677,6 +772,7 @@
 
     function showSuccess(result) {
       var amountText = Number(result.amount || amt).toFixed(2);
+      var creditText = Number(result.creditAmount || result.amount || amt).toFixed(2);
       var boxNum = result.boxNum || "-";
       var payId = result.payId || "-";
       if (boxNum !== "-") {
@@ -685,10 +781,11 @@
       }
 
       document.getElementById("success-title").textContent = "Top Up Successful!";
-      document.getElementById("success-sub").textContent = "\u00a3" + amountText + " loaded - Bay " + boxNum + " started.";
+      document.getElementById("success-sub").textContent = "\u00a3" + creditText + " credit loaded - Bay " + boxNum + " started.";
       document.getElementById("steps-content").innerHTML =
         '<div class="it">Transaction Details</div>' +
-        '<p class="ix">Amount: <span style="color:#fff;font-weight:700">\u00a3' + amountText + "</span></p>" +
+        '<p class="ix">Paid: <span style="color:#fff;font-weight:700">\u00a3' + amountText + "</span></p>" +
+        '<p class="ix">Credit: <span style="color:#fff;font-weight:700">\u00a3' + creditText + "</span></p>" +
         '<p class="ix">Bay: <span style="color:#fff;font-weight:700">' + boxNum + "</span></p>" +
         '<p class="ix">Pay ID: <span style="color:#fff;font-weight:700">' + payId + "</span></p>" +
         '<p class="ix" style="margin-top:8px">Machine command accepted. You can wash now.</p>';
@@ -764,6 +861,22 @@
     }
 
     readBoxNumFromQuery();
+    function renderBonusPacks() {
+      var row = document.getElementById("bonus-row");
+      if (!row) {
+        return;
+      }
+      row.innerHTML = "";
+      bonusPacks.forEach(function (pack, index) {
+        var btn = document.createElement("button");
+        btn.className = "bonus-btn";
+        btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
+        btn.onclick = function () { setBonus(index); };
+        row.appendChild(btn);
+      });
+    }
+
+    renderBonusPacks();
     ui();
     handleReturnFromStripe();
   </script>
