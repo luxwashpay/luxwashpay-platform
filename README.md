@@ -57,3 +57,4 @@ This project now uses a real backend flow:
 - To collect £0.50 automatically per QR top-up, set:
   - `STRIPE_CONNECT_ACCOUNT_ID=acct_...` (connected account for the car wash)
   - `PLATFORM_FEE_PENCE=50`
+# LuxWash-1
