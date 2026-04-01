@@ -88,6 +88,10 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .forecast-item span{color:var(--muted)}
 .disclaimer{margin-top:10px;font-size:0.7rem;color:var(--muted-2)}
 
+.heatmap{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.heat-cell{height:40px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:0.6rem;color:var(--muted-2)}
+.heat-cell strong{font-size:0.7rem;color:var(--white)}
+
 .bay-list{display:grid;gap:10px}
 .bay-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
 .bay-name{font-size:0.8rem;color:var(--muted)}
@@ -105,6 +109,21 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .alert{padding:10px 12px;border:1px solid rgba(255,77,109,0.3);background:rgba(255,77,109,0.08)}
 .alert strong{display:block;font-size:0.8rem;margin-bottom:4px}
 .alert small{color:var(--muted-2)}
+
+.status-strip{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.status-chip{flex:1;min-width:160px;padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:linear-gradient(140deg,rgba(255,255,255,0.04),rgba(255,255,255,0));position:relative;overflow:hidden}
+.status-chip::after{content:"";position:absolute;inset:-60% 20% auto -40%;height:120%;background:radial-gradient(circle,rgba(255,255,255,0.15),transparent 70%);opacity:0.3;transform:translateX(-60%)}
+.status-chip.ok{box-shadow:0 0 20px rgba(15,191,117,0.2)}
+.status-chip.warn{box-shadow:0 0 20px rgba(246,195,67,0.2)}
+.status-chip.bad{box-shadow:0 0 22px rgba(255,77,109,0.25)}
+.status-chip.ok .chip-dot{background:var(--green);box-shadow:0 0 12px rgba(15,191,117,0.8)}
+.status-chip.warn .chip-dot{background:var(--gold);box-shadow:0 0 12px rgba(246,195,67,0.8)}
+.status-chip.bad .chip-dot{background:#ff4d6d;box-shadow:0 0 14px rgba(255,77,109,0.85)}
+.chip-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.chip-title{font-family:'Space Grotesk',sans-serif;font-size:0.95rem}
+.chip-dot{width:8px;height:8px;border-radius:50%}
+.chip-status{font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+.chip-sub{font-size:0.72rem;color:var(--muted-2)}
 
 .health-list{display:grid;gap:10px}
 .health-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
@@ -155,6 +174,8 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
   <div class="page">
     <div class="page-title">QR Payments Overview</div>
     <div class="page-sub">Real-time view of top-ups, bay performance, and automated machine starts.</div>
+
+    <div class="status-strip" id="status-strip"></div>
 
     <div class="filters">
       <div class="filter-group">
@@ -235,6 +256,12 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
         <div class="bar-labels" id="hour-labels"></div>
         <div class="disclaimer">Not guaranteed — based on recent top-ups.</div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Peak Hours Heatmap</div>
+      <div class="heatmap" id="heatmap"></div>
+      <div class="disclaimer">Not guaranteed — shows busiest hours based on recent top-ups.</div>
     </div>
 
     <div class="card">
@@ -612,6 +639,99 @@ function renderHourlyDemand(transactions){
   });
 }
 
+function renderStatusStrip(transactions){
+  const strip = document.getElementById("status-strip");
+  if(!strip){
+    return;
+  }
+
+  const byBay = new Map();
+  transactions.forEach(tx => {
+    if(!tx.boxNum || !tx.createdAt){
+      return;
+    }
+    const key = String(tx.boxNum);
+    const ts = new Date(tx.createdAt).getTime();
+    const existing = byBay.get(key);
+    if(!existing || ts > existing.ts){
+      byBay.set(key, { ...tx, ts });
+    }
+  });
+
+  strip.innerHTML = "";
+  const bays = dashboardBays.length ? dashboardBays : Array.from(byBay.keys());
+  if(!bays.length){
+    strip.innerHTML = '<div class="muted">No bay status yet</div>';
+    return;
+  }
+
+  bays.forEach((bay, index) => {
+    const key = String(bay);
+    const last = byBay.get(key);
+    const isLongId = key.length > 3;
+    const title = isLongId ? `Bay ${index + 1}` : `Bay ${key}`;
+    const metaPrefix = isLongId ? `Box ${key} • ` : "";
+    let statusClass = "warn";
+    let statusText = "Idle";
+    let subText = metaPrefix + "No recent payments";
+
+    if(last){
+      const minsAgo = (Date.now() - last.ts) / 60000;
+      const isFailed = String(last.status || "").toLowerCase() === "failed";
+      if(isFailed){
+        statusClass = "bad";
+        statusText = "Needs check";
+        subText = `${metaPrefix}Last attempt failed`;
+      } else if(minsAgo > bayAlertMinutes){
+        statusClass = "warn";
+        statusText = "Idle";
+        subText = `${metaPrefix}Last payment ${timeAgo(last.ts)}`;
+      } else {
+        statusClass = "ok";
+        statusText = "Online";
+        subText = `${metaPrefix}Last payment ${timeAgo(last.ts)}`;
+      }
+    }
+
+    const chip = document.createElement("div");
+    chip.className = `status-chip ${statusClass}`;
+    chip.innerHTML = `
+      <div class="chip-header">
+        <div class="chip-title">${title}</div>
+        <div class="chip-dot"></div>
+      </div>
+      <div class="chip-status">${statusText}</div>
+      <div class="chip-sub">${subText}</div>
+    `;
+    strip.appendChild(chip);
+  });
+}
+
+function renderHeatmap(transactions){
+  const grid = document.getElementById("heatmap");
+  if(!grid){
+    return;
+  }
+  const counts = Array(24).fill(0);
+  transactions.forEach(tx => {
+    if(!tx.createdAt || String(tx.status || "").toLowerCase() === "failed"){
+      return;
+    }
+    const hour = new Date(tx.createdAt).getHours();
+    counts[hour] += 1;
+  });
+  const max = Math.max(...counts, 1);
+  grid.innerHTML = "";
+  counts.forEach((count, hour) => {
+    const intensity = count / max;
+    const cell = document.createElement("div");
+    cell.className = "heat-cell";
+    cell.style.background = `rgba(206,17,38,${0.15 + intensity * 0.7})`;
+    cell.innerHTML = `<strong>${hour}:00</strong><span>${count} top-ups</span>`;
+    grid.appendChild(cell);
+  });
+}
+
 function renderBayHealth(transactions){
   const list = document.getElementById("health-list");
   if(!list){
@@ -691,6 +811,10 @@ function renderUsers(){
     const row = document.createElement("div");
     row.className = "user-card";
     row.innerHTML = `<span>${user.name} <small style="color:var(--muted-2)">(${user.role || "staff"})</small></span>`;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+
     const resetBtn = document.createElement("button");
     resetBtn.className = "user-btn";
     resetBtn.textContent = "Reset PIN";
@@ -700,7 +824,23 @@ function renderUsers(){
       setUsers(users);
       alert(`${user.name} new PIN: ${newPin}`);
     };
-    row.appendChild(resetBtn);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "user-btn";
+    removeBtn.textContent = "Remove";
+    removeBtn.onclick = () => {
+      const confirmRemove = confirm(`Remove ${user.name}?`);
+      if(!confirmRemove){
+        return;
+      }
+      const next = users.filter((_, i) => i !== index);
+      setUsers(next);
+      renderUsers();
+    };
+
+    actions.appendChild(resetBtn);
+    actions.appendChild(removeBtn);
+    row.appendChild(actions);
     list.appendChild(row);
   });
 }
@@ -753,8 +893,10 @@ async function loadDashboard(){
       healthItems = [];
     }
     renderBayHealth(healthItems);
+    renderStatusStrip(healthItems);
     renderForecast(healthItems);
     renderHourlyDemand(healthItems);
+    renderHeatmap(healthItems);
 
     const baySelect = document.getElementById("filterBay");
     if(baySelect.options.length <= 1){
