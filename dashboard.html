@@ -46,6 +46,10 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .logo-line{width:10px;height:24px;border-radius:2px}
 .logo-text span{color:var(--red)}
 .top-actions{display:flex;align-items:center;gap:12px}
+.translate-wrap{display:flex;align-items:center;gap:8px}
+.translate-label{font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
+.goog-te-gadget{color:var(--muted) !important}
+.goog-te-gadget select{background:rgba(255,255,255,0.06);color:var(--white);border:1px solid var(--border);padding:6px 10px;font-size:0.7rem}
 .badge{font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);padding:6px 12px}
 .logout{border:1px solid var(--border);background:transparent;color:var(--muted);padding:6px 12px;font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
 
@@ -125,16 +129,6 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .chip-status{font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
 .chip-sub{font-size:0.72rem;color:var(--muted-2)}
 
-.health-list{display:grid;gap:10px}
-.health-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
-.health-left{display:flex;flex-direction:column;gap:4px}
-.health-title{font-size:0.82rem}
-.health-sub{font-size:0.68rem;color:var(--muted-2)}
-.health-status{font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
-.health-ok{background:rgba(15,191,117,0.15);color:var(--green)}
-.health-warn{background:rgba(246,195,67,0.15);color:var(--gold)}
-.health-bad{background:rgba(255,77,109,0.15);color:#ff7d7d}
-
 .actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:10px}
 .csv-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
 .print-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
@@ -166,6 +160,10 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       <div class="logo-text">Lux<span>Wash</span> Ops</div>
     </div>
     <div class="top-actions">
+      <div class="translate-wrap">
+        <div class="translate-label">Translate</div>
+        <div id="google_translate_element"></div>
+      </div>
       <div class="badge">Live Dashboard</div>
       <button class="logout" id="logoutBtn">Log out</button>
     </div>
@@ -238,10 +236,6 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
         <div class="chart-wrap" id="bay-bars"></div>
         <div class="bar-labels" id="bay-labels"></div>
       </div>
-      <div class="card">
-        <div class="card-title">Bay Health</div>
-        <div class="health-list" id="health-list"></div>
-      </div>
     </div>
 
     <div class="grid">
@@ -300,6 +294,11 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
           <textarea class="filter-input" id="settingsBays" rows="4" placeholder="260529, 260530, 260531, 260532, 260533"></textarea>
           <div class="filter-label" style="margin-top:14px">Alert if no payments in (minutes)</div>
           <input class="filter-input" id="settingsMinutes" type="number" min="5" step="5" placeholder="60" />
+          <div class="filter-label" style="margin-top:14px">Staff Access</div>
+          <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem">
+            <input type="checkbox" id="settingsStaffFilters" />
+            Allow staff to see filters + reports
+          </label>
           <button class="filter-btn" id="saveSettings" style="margin-top:12px">Save Settings</button>
         </div>
         <div>
@@ -357,6 +356,7 @@ const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_BAYS_KEY = "luxwash_dashboard_bays";
 const SETTINGS_MINUTES_KEY = "luxwash_dashboard_alert_minutes";
+const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
 
 const DEFAULT_BAYS = normalizeBays(window.LUXWASH_BAYS).length
   ? normalizeBays(window.LUXWASH_BAYS)
@@ -364,6 +364,7 @@ const DEFAULT_BAYS = normalizeBays(window.LUXWASH_BAYS).length
 const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
 let dashboardBays = [];
 let bayAlertMinutes = DEFAULT_MINUTES;
+let staffFiltersEnabled = true;
 
 const storageKey = "luxwash_dashboard_users";
 const adminKey = "luxwash_dashboard_admin";
@@ -408,11 +409,14 @@ function loadSettings(){
   dashboardBays = storedBays.length ? storedBays : DEFAULT_BAYS.slice();
   const storedMinutes = Number(localStorage.getItem(SETTINGS_MINUTES_KEY));
   bayAlertMinutes = Number.isFinite(storedMinutes) && storedMinutes > 0 ? storedMinutes : DEFAULT_MINUTES;
+  const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
+  staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
 }
 
-function saveSettings(bays, minutes){
+function saveSettings(bays, minutes, allowStaffFilters){
   localStorage.setItem(SETTINGS_BAYS_KEY, bays.join(","));
   localStorage.setItem(SETTINGS_MINUTES_KEY, String(minutes));
+  localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, allowStaffFilters ? "true" : "false");
   loadSettings();
 }
 
@@ -436,6 +440,11 @@ function renderSettingsPreview(){
   mins.className = "bay-item";
   mins.innerHTML = `<div class="bay-name">Alert threshold</div><div class="bay-value">${bayAlertMinutes} min</div>`;
   preview.appendChild(mins);
+
+  const staff = document.createElement("div");
+  staff.className = "bay-item";
+  staff.innerHTML = `<div class="bay-name">Staff filters</div><div class="bay-value">${staffFiltersEnabled ? "Enabled" : "Hidden"}</div>`;
+  preview.appendChild(staff);
 }
 
 function timeAgo(ts){
@@ -732,77 +741,6 @@ function renderHeatmap(transactions){
   });
 }
 
-function renderBayHealth(transactions){
-  const list = document.getElementById("health-list");
-  if(!list){
-    return;
-  }
-
-  const byBay = new Map();
-  transactions.forEach(tx => {
-    if(!tx.boxNum || !tx.createdAt){
-      return;
-    }
-    const key = String(tx.boxNum);
-    const ts = new Date(tx.createdAt).getTime();
-    const existing = byBay.get(key);
-    if(!existing || ts > existing.ts){
-      byBay.set(key, { ...tx, ts });
-    }
-  });
-
-  const bays = dashboardBays.length ? dashboardBays : Array.from(byBay.keys());
-  if(!bays.length){
-    list.innerHTML = '<div class="muted">No bay data yet</div>';
-    return;
-  }
-
-  list.innerHTML = "";
-  const now = Date.now();
-  bays.forEach((bay, index) => {
-    const key = String(bay);
-    const last = byBay.get(key);
-    const isLongId = key.length > 3;
-    const displayName = isLongId ? `Bay ${index + 1}` : `Bay ${key}`;
-    const metaPrefix = isLongId ? `Box ${key} • ` : "";
-
-    let statusClass = "health-warn";
-    let statusText = "No recent payments";
-    let subText = metaPrefix + "No payments recorded yet";
-
-    if(last){
-      const minsAgo = (now - last.ts) / 60000;
-      const agoText = timeAgo(last.ts);
-      const isFailed = String(last.status || "").toLowerCase() === "failed";
-
-      if(isFailed){
-        statusClass = "health-bad";
-        statusText = "Needs check";
-        subText = `${metaPrefix}Last attempt failed • ${agoText}`;
-      } else if(minsAgo > bayAlertMinutes){
-        statusClass = "health-warn";
-        statusText = "No recent payments";
-        subText = `${metaPrefix}Last payment ${agoText}`;
-      } else {
-        statusClass = "health-ok";
-        statusText = "Online";
-        subText = `${metaPrefix}Last payment ${agoText}`;
-      }
-    }
-
-    const item = document.createElement("div");
-    item.className = "health-item";
-    item.innerHTML = `
-      <div class="health-left">
-        <div class="health-title">${displayName}</div>
-        <div class="health-sub">${subText}</div>
-      </div>
-      <div class="health-status ${statusClass}">${statusText}</div>
-    `;
-    list.appendChild(item);
-  });
-}
-
 function renderUsers(){
   const list = document.getElementById("userList");
   const users = getUsers();
@@ -860,11 +798,15 @@ function buildQuery(){
 function setupSettingsUI(){
   const baysField = document.getElementById("settingsBays");
   const minutesField = document.getElementById("settingsMinutes");
+  const staffField = document.getElementById("settingsStaffFilters");
   if(!baysField || !minutesField){
     return;
   }
   baysField.value = dashboardBays.join(", ");
   minutesField.value = String(bayAlertMinutes || DEFAULT_MINUTES);
+  if(staffField){
+    staffField.checked = staffFiltersEnabled;
+  }
   renderSettingsPreview();
 }
 
@@ -892,7 +834,6 @@ async function loadDashboard(){
     }catch(e){
       healthItems = [];
     }
-    renderBayHealth(healthItems);
     renderStatusStrip(healthItems);
     renderForecast(healthItems);
     renderHourlyDemand(healthItems);
@@ -944,6 +885,15 @@ function applyRole(){
   } else {
     usersCard.style.display = "block";
     settingsCard.style.display = "block";
+  }
+  const filters = document.querySelector(".filters");
+  const actions = document.querySelector(".actions");
+  if(role === "staff" && !staffFiltersEnabled){
+    if(filters) filters.style.display = "none";
+    if(actions) actions.style.display = "none";
+  } else {
+    if(filters) filters.style.display = "flex";
+    if(actions) actions.style.display = "flex";
   }
 }
 
@@ -1017,18 +967,24 @@ document.getElementById("saveAdminPin").addEventListener("click", () => {
 document.getElementById("saveSettings").addEventListener("click", () => {
   const baysInput = document.getElementById("settingsBays").value;
   const minutesInput = Number(document.getElementById("settingsMinutes").value);
+  const staffInput = document.getElementById("settingsStaffFilters");
   const bays = normalizeBays(baysInput);
   if(!bays.length){
     alert("Enter at least one bay number");
     return;
   }
   const minutes = Number.isFinite(minutesInput) && minutesInput > 0 ? minutesInput : DEFAULT_MINUTES;
-  saveSettings(bays, minutes);
+  const allowStaffFilters = staffInput ? staffInput.checked : true;
+  saveSettings(bays, minutes, allowStaffFilters);
   setupSettingsUI();
+  applyRole();
   loadDashboard();
 });
 
 loadSettings();
+if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
+  applyRole();
+}
 renderUsers();
 setupSettingsUI();
 loadDashboard();
@@ -1040,5 +996,13 @@ if(LOGO_URL){
   document.getElementById("logoImg").style.display = "none";
 }
 </script>
+<script>
+function googleTranslateElementInit(){
+  if(window.google && google.translate && google.translate.TranslateElement){
+    new google.translate.TranslateElement({ pageLanguage: "en", layout: google.translate.TranslateElement.InlineLayout.SIMPLE }, "google_translate_element");
+  }
+}
+</script>
+<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>
