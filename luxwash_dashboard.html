@@ -286,28 +286,6 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
-    <div class="card" id="settingsCard" style="margin-top:18px">
-      <div class="card-title">Dashboard Settings</div>
-      <div class="users-grid">
-        <div>
-          <div class="filter-label">Bay Numbers (comma or new line)</div>
-          <textarea class="filter-input" id="settingsBays" rows="4" placeholder="260529, 260530, 260531, 260532, 260533"></textarea>
-          <div class="filter-label" style="margin-top:14px">Alert if no payments in (minutes)</div>
-          <input class="filter-input" id="settingsMinutes" type="number" min="5" step="5" placeholder="60" />
-          <div class="filter-label" style="margin-top:14px">Staff Access</div>
-          <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem">
-            <input type="checkbox" id="settingsStaffFilters" />
-            Allow staff to see filters + reports
-          </label>
-          <button class="filter-btn" id="saveSettings" style="margin-top:12px">Save Settings</button>
-        </div>
-        <div>
-          <div class="filter-label">Current Settings</div>
-          <div class="bay-list" id="settingsPreview"></div>
-        </div>
-      </div>
-    </div>
-
     <div class="card" id="usersCard" style="margin-top:18px">
       <div class="card-title">Users & PIN Settings</div>
       <div class="users-grid">
@@ -326,6 +304,11 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
           <div class="filter-label" style="margin-top:18px">Admin PIN</div>
           <input class="filter-input" id="adminPinInput" placeholder="New admin PIN" />
           <button class="filter-btn" id="saveAdminPin" style="margin-top:10px">Save Admin PIN</button>
+          <div class="filter-label" style="margin-top:18px">Staff Access</div>
+          <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem">
+            <input type="checkbox" id="settingsStaffFilters" />
+            Allow staff to see filters + reports
+          </label>
         </div>
       </div>
     </div>
@@ -354,15 +337,10 @@ const origin = window.location && window.location.origin && window.location.orig
 const API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://127.0.0.1:3000";
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
-const SETTINGS_BAYS_KEY = "luxwash_dashboard_bays";
-const SETTINGS_MINUTES_KEY = "luxwash_dashboard_alert_minutes";
 const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
-
-const DEFAULT_BAYS = normalizeBays(window.LUXWASH_BAYS).length
-  ? normalizeBays(window.LUXWASH_BAYS)
-  : ["260529", "260530", "260531", "260532", "260533"];
+const DEFAULT_BAYS = ["260529", "260530", "260531", "260532", "260533"];
 const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
-let dashboardBays = [];
+let dashboardBays = DEFAULT_BAYS.slice();
 let bayAlertMinutes = DEFAULT_MINUTES;
 let staffFiltersEnabled = true;
 
@@ -405,46 +383,8 @@ function formatDate(iso){
 }
 
 function loadSettings(){
-  const storedBays = normalizeBays(localStorage.getItem(SETTINGS_BAYS_KEY));
-  dashboardBays = storedBays.length ? storedBays : DEFAULT_BAYS.slice();
-  const storedMinutes = Number(localStorage.getItem(SETTINGS_MINUTES_KEY));
-  bayAlertMinutes = Number.isFinite(storedMinutes) && storedMinutes > 0 ? storedMinutes : DEFAULT_MINUTES;
   const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
   staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
-}
-
-function saveSettings(bays, minutes, allowStaffFilters){
-  localStorage.setItem(SETTINGS_BAYS_KEY, bays.join(","));
-  localStorage.setItem(SETTINGS_MINUTES_KEY, String(minutes));
-  localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, allowStaffFilters ? "true" : "false");
-  loadSettings();
-}
-
-function renderSettingsPreview(){
-  const preview = document.getElementById("settingsPreview");
-  if(!preview){
-    return;
-  }
-  preview.innerHTML = "";
-  if(!dashboardBays.length){
-    preview.innerHTML = '<div class="muted">No bays configured</div>';
-    return;
-  }
-  dashboardBays.forEach((bay, index) => {
-    const item = document.createElement("div");
-    item.className = "bay-item";
-    item.innerHTML = `<div class="bay-name">Bay ${index + 1}</div><div class="bay-value">${bay}</div>`;
-    preview.appendChild(item);
-  });
-  const mins = document.createElement("div");
-  mins.className = "bay-item";
-  mins.innerHTML = `<div class="bay-name">Alert threshold</div><div class="bay-value">${bayAlertMinutes} min</div>`;
-  preview.appendChild(mins);
-
-  const staff = document.createElement("div");
-  staff.className = "bay-item";
-  staff.innerHTML = `<div class="bay-name">Staff filters</div><div class="bay-value">${staffFiltersEnabled ? "Enabled" : "Hidden"}</div>`;
-  preview.appendChild(staff);
 }
 
 function timeAgo(ts){
@@ -795,20 +735,7 @@ function buildQuery(){
   return query ? "?" + query : "";
 }
 
-function setupSettingsUI(){
-  const baysField = document.getElementById("settingsBays");
-  const minutesField = document.getElementById("settingsMinutes");
-  const staffField = document.getElementById("settingsStaffFilters");
-  if(!baysField || !minutesField){
-    return;
-  }
-  baysField.value = dashboardBays.join(", ");
-  minutesField.value = String(bayAlertMinutes || DEFAULT_MINUTES);
-  if(staffField){
-    staffField.checked = staffFiltersEnabled;
-  }
-  renderSettingsPreview();
-}
+function setupSettingsUI(){}
 
 async function loadDashboard(){
   try {
@@ -878,13 +805,10 @@ function unlockIfPinMatches(){
 function applyRole(){
   const role = localStorage.getItem("luxwash_dash_role") || "staff";
   const usersCard = document.getElementById("usersCard");
-  const settingsCard = document.getElementById("settingsCard");
   if(role !== "owner"){
     usersCard.style.display = "none";
-    settingsCard.style.display = "none";
   } else {
     usersCard.style.display = "block";
-    settingsCard.style.display = "block";
   }
   const filters = document.querySelector(".filters");
   const actions = document.querySelector(".actions");
@@ -964,29 +888,24 @@ document.getElementById("saveAdminPin").addEventListener("click", () => {
   alert("Admin PIN updated");
 });
 
-document.getElementById("saveSettings").addEventListener("click", () => {
-  const baysInput = document.getElementById("settingsBays").value;
-  const minutesInput = Number(document.getElementById("settingsMinutes").value);
-  const staffInput = document.getElementById("settingsStaffFilters");
-  const bays = normalizeBays(baysInput);
-  if(!bays.length){
-    alert("Enter at least one bay number");
-    return;
-  }
-  const minutes = Number.isFinite(minutesInput) && minutesInput > 0 ? minutesInput : DEFAULT_MINUTES;
-  const allowStaffFilters = staffInput ? staffInput.checked : true;
-  saveSettings(bays, minutes, allowStaffFilters);
-  setupSettingsUI();
-  applyRole();
-  loadDashboard();
-});
+const staffToggle = document.getElementById("settingsStaffFilters");
+if(staffToggle){
+  staffToggle.checked = staffFiltersEnabled;
+  staffToggle.addEventListener("change", () => {
+    staffFiltersEnabled = staffToggle.checked;
+    localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, staffFiltersEnabled ? "true" : "false");
+    applyRole();
+  });
+}
 
 loadSettings();
+if(staffToggle){
+  staffToggle.checked = staffFiltersEnabled;
+}
 if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
   applyRole();
 }
 renderUsers();
-setupSettingsUI();
 loadDashboard();
 setInterval(loadDashboard, 15000);
 
