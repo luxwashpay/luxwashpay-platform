@@ -48,6 +48,7 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const completedSessions = new Map();
 const appVersion = "2026-03-26-auth-auto-v2";
 const transactionsFile = path.join(__dirname, "data", "transactions.json");
+let memoryTransactions = null;
 
 let tokenCache = { value: "", expiresAt: 0 };
 let autoAuthStrategyName = "";
@@ -55,6 +56,9 @@ let autoAuthStrategyName = "";
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function readTransactions() {
+  if (Array.isArray(memoryTransactions)) {
+    return memoryTransactions;
+  }
   try {
     const raw = await fs.readFile(transactionsFile, "utf8");
     const parsed = JSON.parse(raw);
@@ -63,12 +67,25 @@ async function readTransactions() {
     if (error.code === "ENOENT") {
       return [];
     }
+    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+      memoryTransactions = memoryTransactions || [];
+      return memoryTransactions;
+    }
     throw error;
   }
 }
 
 async function writeTransactions(list) {
-  await fs.writeFile(transactionsFile, JSON.stringify(list, null, 2));
+  try {
+    await fs.writeFile(transactionsFile, JSON.stringify(list, null, 2));
+    memoryTransactions = null;
+  } catch (error) {
+    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+      memoryTransactions = list;
+      return;
+    }
+    throw error;
+  }
 }
 
 function toDateKey(date) {
@@ -892,6 +909,10 @@ app.get("/api/dashboard/alerts", async (req, res) => {
   }
 });
 
-app.listen(port, host, () => {
-  console.log(`LuxWash backend ${appVersion} running on http://${host}:${port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, host, () => {
+    console.log(`LuxWash backend ${appVersion} running on http://${host}:${port}`);
+  });
+}
+
+export default app;

@@ -322,7 +322,10 @@ function normalizeBays(value){
   return [];
 }
 
-const API_BASE_URL = window.LUXWASH_API_BASE_URL || "http://127.0.0.1:3000";
+const origin = window.location && window.location.origin && window.location.origin !== "null"
+  ? window.location.origin
+  : "";
+const API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://127.0.0.1:3000";
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_BAYS_KEY = "luxwash_dashboard_bays";

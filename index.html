@@ -499,7 +499,10 @@
   </div>
 
   <script>
-    var API_BASE_URL = window.LUXWASH_API_BASE_URL || "http://localhost:3000";
+    var origin = window.location && window.location.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://localhost:3000";
     var amt = 2;
     var isBusy = false;
     var selectedBoxNum = null;
