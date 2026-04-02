@@ -692,10 +692,18 @@ app.post("/api/topup/create-session", async (req, res) => {
   try {
     assertConfigured();
 
-    const amount = parseAmount(req.body?.amount);
+    const amountCharged = parseAmount(req.body?.amount);
     const boxNum = parseBoxNum(req.body?.boxNum);
+    let creditAmount = amountCharged;
+    if (req.body?.creditAmount !== undefined) {
+      creditAmount = parseAmount(req.body?.creditAmount);
+      if (creditAmount < amountCharged) {
+        creditAmount = amountCharged;
+      }
+    }
+    const bonusAmount = Math.max(0, creditAmount - amountCharged);
 
-    await checkBoxAvailability(boxNum, amount);
+    await checkBoxAvailability(boxNum, creditAmount);
 
     const successUrl = `${publicAppUrl}${publicTopupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${publicAppUrl}${publicTopupPath}?payment=cancelled`;
@@ -703,7 +711,9 @@ app.post("/api/topup/create-session", async (req, res) => {
     const paymentIntentData = {
       metadata: {
         box_num: String(boxNum),
-        topup_amount: amount.toFixed(2),
+        topup_amount_charged: amountCharged.toFixed(2),
+        topup_amount_credit: creditAmount.toFixed(2),
+        bonus_amount: bonusAmount.toFixed(2),
       },
     };
 
@@ -721,10 +731,10 @@ app.post("/api/topup/create-session", async (req, res) => {
           quantity: 1,
           price_data: {
             currency: stripeCurrency,
-            unit_amount: Math.round(amount * 100),
+            unit_amount: Math.round(amountCharged * 100),
             product_data: {
               name: `LuxWash Top Up - Bay ${boxNum}`,
-              description: `Machine top-up credit £${amount.toFixed(2)}`,
+              description: `Machine top-up £${amountCharged.toFixed(2)}${bonusAmount > 0 ? ` (+£${bonusAmount.toFixed(2)} bonus)` : ""}`,
             },
           },
         },
@@ -760,26 +770,36 @@ app.post("/api/topup/confirm", async (req, res) => {
       throw new Error("Payment is not confirmed yet");
     }
 
-    const amountFromSession = session.metadata?.topup_amount
-      ? Number(session.metadata.topup_amount)
+    const amountChargedFromSession = session.metadata?.topup_amount_charged
+      ? Number(session.metadata.topup_amount_charged)
       : Number((session.amount_total || 0) / 100);
+    const amountCreditFromSession = session.metadata?.topup_amount_credit
+      ? Number(session.metadata.topup_amount_credit)
+      : amountChargedFromSession;
 
-    const amount = parseAmount(amountFromSession);
+    const amountCharged = parseAmount(amountChargedFromSession);
+    let creditAmount = parseAmount(amountCreditFromSession);
+    if (creditAmount < amountCharged) {
+      creditAmount = amountCharged;
+    }
+    const bonusAmount = Math.max(0, creditAmount - amountCharged);
     const boxNum = parseBoxNum(req.body?.boxNum ?? session.metadata?.box_num);
 
-    await checkBoxAvailability(boxNum, amount);
+    await checkBoxAvailability(boxNum, creditAmount);
 
     let payment;
     let statusPayload;
     try {
-      payment = await registerUnipayPayment(boxNum, amount);
+      payment = await registerUnipayPayment(boxNum, creditAmount);
       await acknowledgeUnipayPayment(payment.payId);
       statusPayload = await waitForUnipayStatus(payment.payId);
     } catch (error) {
       await logTransaction({
         id: `tx_${sessionId}`,
         sessionId,
-        amount,
+        amount: amountCharged,
+        creditAmount,
+        bonusAmount,
         boxNum,
         payId: payment?.payId ?? null,
         createdAt: new Date().toISOString(),
@@ -792,7 +812,9 @@ app.post("/api/topup/confirm", async (req, res) => {
     const result = {
       ok: true,
       sessionId,
-      amount,
+      amount: amountCharged,
+      creditAmount,
+      bonusAmount,
       boxNum,
       payId: payment.payId,
       unipayStatus: statusPayload,
@@ -801,7 +823,9 @@ app.post("/api/topup/confirm", async (req, res) => {
     await logTransaction({
       id: `tx_${sessionId}`,
       sessionId,
-      amount,
+      amount: amountCharged,
+      creditAmount,
+      bonusAmount,
       boxNum,
       payId: payment.payId,
       createdAt: new Date().toISOString(),
@@ -880,7 +904,7 @@ app.get("/api/dashboard/transactions.csv", async (_req, res) => {
   try {
     const transactions = await readTransactions();
     const filtered = applyFilters(transactions, _req.query);
-    const headers = ["createdAt", "boxNum", "amount", "payId", "status", "error", "sessionId"];
+    const headers = ["createdAt", "boxNum", "amount", "creditAmount", "bonusAmount", "payId", "status", "error", "sessionId"];
     const rows = [headers.join(",")];
     filtered.forEach((tx) => {
       const values = headers.map((key) => {
