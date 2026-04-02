@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LuxWash Top Up</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #090909;
+      color: #fff;
+    }
+    .wrap {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #cv {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 40;
+    }
+    .pg {
+      min-height: 100vh;
+      background: linear-gradient(160deg, #0a0a0a, #1a0505);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 20px 16px;
+    }
+    .sr {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .sb {
+      width: 28px;
+      height: 4px;
+      border-radius: 2px;
+    }
+    .logo {
+      color: #fff;
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-align: center;
+      margin-bottom: 2px;
+      text-shadow: 0 0 30px rgba(206, 17, 38, 0.35);
+    }
+    .tag {
+      color: #ce1126;
+      font-size: 9px;
+      letter-spacing: 4px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .badge {
+      display: inline-block;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #666;
+      font-size: 11px;
+      padding: 3px 12px;
+      border-radius: 20px;
+    }
+    .card {
+      width: 100%;
+      max-width: 390px;
+      border-radius: 24px;
+      border: 1px solid #252525;
+      background: #161616;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+      padding: 20px 18px;
+    }
+    .cl {
+      color: #444;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-align: center;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+    .svc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .svc-card {
+      background: #0e0e0e;
+      border: 1px solid #1e1e1e;
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .svc-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .svc-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .svc-gun {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+    .svc-name {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .svc-price {
+      color: #ce1126;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .svc-desc {
+      color: #555;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .opt-label {
+      color: #444;
+      font-size: 9px;
+      letter-spacing: 2px;
+      font-weight: 700;
+      text-align: center;
+      margin: 4px 0 8px;
+      padding-top: 6px;
+      border-top: 1px solid #1e1e1e;
+    }
+    .divider {
+      height: 1px;
+      background: #1e1e1e;
+      margin: 14px 0;
+    }
+    .amt-label {
+      color: #444;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-align: center;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .amt-hint {
+      color: #555;
+      font-size: 11px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .amt-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 14px;
+    }
+    .amt-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 2px solid #ce1126;
+      background: rgba(206, 17, 38, 0.08);
+      color: #ce1126;
+      font-size: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .amt-btn:hover { background: rgba(206, 17, 38, 0.2); }
+    .amt-btn:disabled { opacity: 0.25; cursor: default; }
+    .amt-num {
+      display: block;
+      color: #fff;
+      font-size: 60px;
+      font-weight: 900;
+      line-height: 1;
+      text-align: center;
+    }
+    .amt-sub {
+      color: #555;
+      font-size: 12px;
+      display: block;
+      margin-top: 3px;
+      text-align: center;
+    }
+    .presets {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .pre {
+      padding: 8px 13px;
+      border-radius: 20px;
+      border: 1px solid #2a2a2a;
+      background: transparent;
+      color: #555;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 56px;
+    }
+    .pre.on {
+      border-color: #ce1126;
+      color: #ce1126;
+      background: rgba(206, 17, 38, 0.1);
+    }
+    .bonus-wrap {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid #1b1b1b;
+      background: rgba(255,255,255,0.02);
+    }
+    .bonus-title {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #666;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .bonus-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .bonus-btn {
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid #2a2a2a;
+      background: #101010;
+      color: #c9c9c9;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .bonus-btn.on {
+      border-color: #0fbf75;
+      color: #0fbf75;
+      background: rgba(15,191,117,0.12);
+    }
+    .bonus-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+    }
+    .bonus-msg {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #a8a8a8;
+      text-align: center;
+    }
+    .status {
+      margin: 2px 0 12px;
+      min-height: 18px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+    }
+    .status.error { color: #ff6b6b; }
+    .status.success { color: #66c98f; }
+    .bay-msg {
+      margin: 0 0 10px;
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      min-height: 16px;
+    }
+    .main-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #ce1126, #8b0a1a);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      box-shadow: 0 6px 24px rgba(206, 17, 38, 0.4);
+      transition: opacity 0.2s;
+    }
+    .main-btn:hover { opacity: 0.88; }
+    .main-btn:disabled { opacity: 0.4; cursor: default; }
+    .sp {
+      display: inline-block;
+      width: 15px;
+      height: 15px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .mt {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .m { color: #444; font-size: 11px; }
+    .sec { color: #333; font-size: 11px; text-align: center; }
+    .ft { color: #2a2a2a; font-size: 11px; text-align: center; }
+    .sc {
+      background: #161616;
+      border: 1px solid #252525;
+      border-radius: 24px;
+      padding: 32px 22px;
+      width: 100%;
+      max-width: 390px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    }
+    .cw {
+      position: relative;
+      width: 84px;
+      height: 84px;
+      margin: 0 auto 20px;
+    }
+    .rp {
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid #009246;
+      opacity: 0;
+      animation: rp 1.8s ease-out infinite;
+    }
+    .rp2 { animation-delay: 0.6s; }
+    .rp3 { animation-delay: 1.2s; }
+    @keyframes rp {
+      0% { transform: scale(0.85); opacity: 0.7; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+    .cc {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: rgba(0, 146, 70, 0.12);
+      border: 2px solid #009246;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 1;
+    }
+    .ck { width: 36px; height: 36px; }
+    .cp {
+      stroke: #009246;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      stroke-dasharray: 65;
+      stroke-dashoffset: 65;
+      animation: dw 0.55s ease forwards 0.25s;
+    }
+    @keyframes dw { to { stroke-dashoffset: 0; } }
+    .st {
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      animation: fu 0.5s ease forwards 0.5s;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .ss {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 20px;
+      animation: fu 0.5s ease forwards 0.7s;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .ib {
+      background: #0e0e0e;
+      border-radius: 14px;
+      padding: 14px 16px;
+      text-align: left;
+      margin-bottom: 16px;
+      animation: fu 0.5s ease forwards 0.9s;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .it {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .ix {
+      color: #777;
+      font-size: 12px;
+      margin-bottom: 6px;
+      line-height: 1.6;
+    }
+    .sh { color: #ce1126; font-weight: 800; }
+    .nb {
+      padding: 12px 28px;
+      background: #ce1126;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      animation: fu 0.5s ease forwards 1.1s;
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    @keyframes fu { to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 360px) {
+      .logo { font-size: 34px; }
+      .svc-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <canvas id="cv"></canvas>
+
+    <div id="p1">
+      <div class="pg">
+        <div style="text-align:center">
+          <div class="sr">
+            <div class="sb" style="background:#009246"></div>
+            <div class="sb" style="background:#fff"></div>
+            <div class="sb" style="background:#ce1126"></div>
+          </div>
+          <div class="logo">LuxWash</div>
+          <div class="tag">PREMIUM SELF-SERVICE CAR WASH</div>
+          <div class="badge">Open 24/7 &bull; Walsall</div>
+        </div>
+
+        <div class="card">
+          <div class="cl">OUR SERVICES</div>
+          <div class="svc-grid">
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#cc2200"></div><span class="svc-gun" style="background:#3a0000;color:#ff6644">RED GUN</span></div><div class="svc-name">Active Foam</div><div class="svc-price">&pound;2.50 / min</div><div class="svc-desc">Premium pre-wash snow foam that clings and lifts dirt before rinsing.</div></div>
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#1e6aaa"></div><span class="svc-gun" style="background:#001a3a;color:#4499ff">BLUE GUN</span></div><div class="svc-name">Water Rinse</div><div class="svc-price">&pound;1.00 / min</div><div class="svc-desc">Treated softened water at high pressure. Keep 30-40 cm from surface.</div></div>
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#1e6aaa"></div><span class="svc-gun" style="background:#001a3a;color:#4499ff">BLUE GUN</span></div><div class="svc-name">Wax</div><div class="svc-price">&pound;1.50 / min</div><div class="svc-desc">High gloss wax coat. Protects paintwork and gives a deep shine.</div></div>
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#1e6aaa"></div><span class="svc-gun" style="background:#001a3a;color:#4499ff">BLUE GUN</span></div><div class="svc-name">Osmosis Rinse</div><div class="svc-price">&pound;1.75 / min</div><div class="svc-desc">Demineralised water for spot-free finish. Use as your final rinse.</div></div>
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#444"></div><span class="svc-gun" style="background:#111;color:#aaa">BLACK GUN</span></div><div class="svc-name">Tyre Blackening</div><div class="svc-price">&pound;2.00 / min</div><div class="svc-desc">Shiny tyre dressing. Restores deep black look and protects rubber.</div></div>
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#1e6aaa"></div><span class="svc-gun" style="background:#001a3a;color:#4499ff">BLUE GUN</span></div><div class="svc-name">Warm Water</div><div class="svc-price">&pound;1.25 / min</div><div class="svc-desc">Full warm rinse. Ideal preparation before applying wax.</div></div>
+          </div>
+
+          <div class="opt-label">OPTIONAL FUNCTIONS</div>
+          <div class="svc-grid">
+            <div class="svc-card"><div class="svc-top"><div class="svc-dot" style="background:#cc2200"></div><span class="svc-gun" style="background:#3a0000;color:#ff6644">RED GUN</span></div><div class="svc-name">LuxNano Foam</div><div class="svc-price">&pound;3.00 / min</div><div class="svc-desc">Premium pink nano foam. Superior cleaning and paint protection.</div></div>
+            <div class="svc-card" style="background:#0a0a0a;border:1px solid #1a1a1a;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:6px"><div style="width:28px;height:4px;border-radius:2px;background:#333;margin-bottom:4px"></div><div style="color:#555;font-size:11px;font-weight:700">PAUSE</div><div style="color:#444;font-size:10px;line-height:1.4">2 minutes free between each step</div></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="amt-label">TOP UP YOUR CREDIT</div>
+          <div class="amt-hint">Select amount and continue to secure checkout</div>
+
+          <div class="amt-row">
+            <button class="amt-btn" id="btn-minus" onclick="chg(-1)">&#8722;</button>
+            <div>
+              <span class="amt-num" id="amt-num">&pound;2</span>
+              <span class="amt-sub">tap + or - to adjust</span>
+            </div>
+            <button class="amt-btn" id="btn-plus" onclick="chg(1)">+</button>
+          </div>
+
+          <div class="presets">
+            <button class="pre on" onclick="setAmt(2)">&pound;2</button>
+            <button class="pre" onclick="setAmt(3)">&pound;3</button>
+            <button class="pre" onclick="setAmt(5)">&pound;5</button>
+            <button class="pre" onclick="setAmt(10)">&pound;10</button>
+            <button class="pre" onclick="setAmt(20)">&pound;20</button>
+          </div>
+
+          <div class="bonus-wrap">
+            <div class="bonus-title">Bonus Packs (extra credit)</div>
+            <div class="bonus-row" id="bonus-row"></div>
+            <div class="bonus-note">Limited time offer • Bonus varies by pack</div>
+          </div>
+
+          <div class="bonus-msg" id="bonus-msg"></div>
+
+          <p class="bay-msg" id="bay-msg"></p>
+          <p class="status" id="status-msg"></p>
+
+          <button class="main-btn" id="topupbtn" onclick="doTopUp()">TOP UP &pound;2.00</button>
+          <div class="mt"><span class="m">Card</span><span class="m">Apple Pay</span><span class="m">G Pay</span><span class="m" style="font-weight:800;font-style:italic">VISA</span></div>
+          <p class="sec">Secured by Stripe &bull; No cash needed</p>
+        </div>
+
+        <p class="ft">info@lux-wash.uk &bull; CCTV in operation 24/7</p>
+      </div>
+    </div>
+
+    <div id="p2" style="display:none">
+      <div class="pg">
+        <div style="text-align:center">
+          <div class="sr">
+            <div class="sb" style="background:#009246"></div>
+            <div class="sb" style="background:#fff"></div>
+            <div class="sb" style="background:#ce1126"></div>
+          </div>
+          <div class="logo">LuxWash</div>
+        </div>
+
+        <div class="sc">
+          <div class="cw">
+            <div class="rp"></div><div class="rp rp2"></div><div class="rp rp3"></div>
+            <div class="cc"><svg class="ck" viewBox="0 0 44 44"><path class="cp" d="M8 22 L18 33 L36 12" /></svg></div>
+          </div>
+
+          <div class="st" id="success-title">Top Up Successful!</div>
+          <p class="ss" id="success-sub">Credit loaded and machine triggered.</p>
+          <div class="ib" id="steps-content">
+            <div class="it">Next Steps</div>
+            <p class="ix">1. Press <span class="sh">START HERE</span> on the machine</p>
+            <p class="ix">2. Select your wash option</p>
+            <p class="ix">3. Enjoy your wash!</p>
+          </div>
+          <button class="nb" onclick="resetFlow()">+ New Top Up</button>
+        </div>
+
+        <p class="ft">LuxWash Walsall &bull; Open 24/7</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var origin = window.location && window.location.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || "https://luxwashpay-git-main-luxwashpay.vercel.app";
+    if (!API_BASE_URL && origin) {
+      API_BASE_URL = origin;
+    }
+    var apiReadyPromise = null;
+    var amt = 2;
+    var creditAmt = 2;
+    var isBusy = false;
+    var selectedBoxNum = null;
+    var presetValues = [2, 3, 5, 10, 20];
+    var bonusPacks = [
+      { pay: 6, credit: 7 },
+      { pay: 10, credit: 11 },
+      { pay: 20, credit: 23 }
+    ];
+    var selectedBonusIndex = -1;
+
+    function setStatus(message, type) {
+      var el = document.getElementById("status-msg");
+      if (!el) {
+        return;
+      }
+      el.textContent = message || "";
+      el.className = "status" + (type ? " " + type : "");
+    }
+
+    function syncAmountControls() {
+      document.getElementById("btn-minus").disabled = isBusy || amt <= 1;
+      document.getElementById("btn-plus").disabled = isBusy || amt >= 50;
+      document.querySelectorAll(".pre").forEach(function (btn, index) {
+        btn.classList.toggle("on", presetValues[index] === amt);
+        btn.disabled = isBusy;
+      });
+      document.querySelectorAll(".bonus-btn").forEach(function (btn, index) {
+        btn.classList.toggle("on", index === selectedBonusIndex);
+        btn.disabled = isBusy;
+      });
+    }
+
+    function ui() {
+      document.getElementById("amt-num").innerHTML = "&pound;" + amt;
+      document.getElementById("topupbtn").textContent = "TOP UP \u00a3" + amt.toFixed(2);
+      var bonusMsg = document.getElementById("bonus-msg");
+      if (creditAmt > amt) {
+        bonusMsg.textContent = "You pay £" + amt.toFixed(2) + " and get £" + creditAmt.toFixed(2) + " credit (+" + (creditAmt - amt).toFixed(2) + " bonus)";
+      } else {
+        bonusMsg.textContent = "";
+      }
+      syncAmountControls();
+    }
+
+    function readBoxNumFromQuery() {
+      var params = new URLSearchParams(window.location.search);
+      var raw = params.get("box_num") || params.get("box");
+      if (!raw) {
+        selectedBoxNum = null;
+        document.getElementById("bay-msg").textContent = "Test mode: default bay from backend env";
+        return;
+      }
+      var parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        selectedBoxNum = null;
+        document.getElementById("bay-msg").textContent = "Invalid bay number in QR link";
+        return;
+      }
+      selectedBoxNum = parsed;
+      document.getElementById("bay-msg").textContent = "Bay " + selectedBoxNum + " selected";
+    }
+
+    function chg(delta) {
+      if (isBusy) {
+        return;
+      }
+      amt = Math.min(50, Math.max(1, amt + delta));
+      creditAmt = amt;
+      selectedBonusIndex = -1;
+      ui();
+    }
+
+    function setAmt(value) {
+      if (isBusy) {
+        return;
+      }
+      amt = value;
+      creditAmt = amt;
+      selectedBonusIndex = -1;
+      ui();
+    }
+
+    function setBonus(index) {
+      if (isBusy) {
+        return;
+      }
+      var pack = bonusPacks[index];
+      if (!pack) {
+        return;
+      }
+      selectedBonusIndex = index;
+      amt = pack.pay;
+      creditAmt = pack.credit;
+      ui();
+    }
+
+    function setButtonLoading(loading, label) {
+      var button = document.getElementById("topupbtn");
+      isBusy = loading;
+      if (loading) {
+        button.disabled = true;
+        button.innerHTML = '<span class="sp"></span>' + label;
+      } else {
+        button.disabled = false;
+        button.textContent = label;
+      }
+      syncAmountControls();
+    }
+
+    async function jsonFetch(url, options) {
+      var response;
+      try {
+        response = await fetch(url, options);
+      } catch (error) {
+        throw new Error("Backend is offline at " + API_BASE_URL + ". Start backend: cd backend && npm start");
+      }
+      var text = await response.text();
+      var data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (error) {
+        data = { error: text || "Unexpected server response" };
+      }
+      if (!response.ok) {
+        throw new Error(data.error || "Request failed");
+      }
+      return data;
+    }
+
+    async function resolveApiBase() {
+      if (apiReadyPromise) {
+        return apiReadyPromise;
+      }
+      apiReadyPromise = (async function () {
+        var candidates = [];
+        if (window.LUXWASH_API_BASE_URL) {
+          candidates.push(window.LUXWASH_API_BASE_URL);
+        }
+        candidates.push("https://luxwashpay-git-main-luxwashpay.vercel.app");
+        if (origin) {
+          candidates.push(origin);
+          if (origin.indexOf("://www.") !== -1) {
+            candidates.push(origin.replace("://www.", "://"));
+          } else if (origin.indexOf("://") !== -1) {
+            var parts = origin.split("://");
+            candidates.push(parts[0] + "://www." + parts[1]);
+          }
+        }
+        candidates.push("https://luxwashpay.com", "https://www.luxwashpay.com");
+        var unique = Array.from(new Set(candidates.filter(Boolean)));
+        for (var i = 0; i < unique.length; i += 1) {
+          var base = unique[i].replace(/\/+$/, "");
+          try {
+            var res = await fetch(base + "/api/health", { cache: "no-store" });
+            if (res.ok) {
+              API_BASE_URL = base;
+              return API_BASE_URL;
+            }
+          } catch (e) {}
+        }
+        return API_BASE_URL;
+      })();
+      return apiReadyPromise;
+    }
+
+    async function doTopUp() {
+      if (isBusy) {
+        return;
+      }
+
+      await resolveApiBase();
+      setButtonLoading(true, "Checking machine...");
+      setStatus("Checking bay availability...", "");
+
+      try {
+        var requestBody = { amount: amt };
+        if (creditAmt > amt) {
+          requestBody.creditAmount = creditAmt;
+        }
+        if (selectedBoxNum) {
+          requestBody.boxNum = selectedBoxNum;
+        }
+
+        var payload = await jsonFetch(API_BASE_URL + "/api/topup/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+
+        setStatus("Redirecting to secure Stripe checkout...", "success");
+        window.location.href = payload.url;
+      } catch (error) {
+        setStatus(error.message, "error");
+        setButtonLoading(false, "TOP UP \u00a3" + amt.toFixed(2));
+      }
+    }
+
+    function stripQueryFromUrl() {
+      var current = new URL(window.location.href);
+      var keepBoxNum = current.searchParams.get("box_num");
+      var keepBox = current.searchParams.get("box");
+      current.search = "";
+      if (keepBoxNum) {
+        current.searchParams.set("box_num", keepBoxNum);
+      } else if (keepBox) {
+        current.searchParams.set("box", keepBox);
+      }
+      var clean = current.pathname + current.search + current.hash;
+      window.history.replaceState({}, document.title, clean);
+    }
+
+    async function handleReturnFromStripe() {
+      await resolveApiBase();
+      var params = new URLSearchParams(window.location.search);
+      var payment = params.get("payment");
+      var sessionId = params.get("session_id");
+
+      if (payment === "cancelled") {
+        setStatus("Payment cancelled. No charge was made.", "error");
+        stripQueryFromUrl();
+        return;
+      }
+
+      if (payment !== "success" || !sessionId) {
+        return;
+      }
+
+      setButtonLoading(true, "Finalising...");
+      setStatus("Payment received. Starting machine...", "");
+
+      try {
+        var result = await jsonFetch(API_BASE_URL + "/api/topup/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: sessionId }),
+        });
+
+        showSuccess(result);
+        stripQueryFromUrl();
+      } catch (error) {
+        setStatus(error.message, "error");
+        setButtonLoading(false, "TOP UP \u00a3" + amt.toFixed(2));
+        stripQueryFromUrl();
+      }
+    }
+
+    function showSuccess(result) {
+      var amountText = Number(result.amount || amt).toFixed(2);
+      var creditText = Number(result.creditAmount || result.amount || amt).toFixed(2);
+      var boxNum = result.boxNum || "-";
+      var payId = result.payId || "-";
+      if (boxNum !== "-") {
+        selectedBoxNum = Number(boxNum);
+        document.getElementById("bay-msg").textContent = "Bay " + selectedBoxNum + " selected";
+      }
+
+      document.getElementById("success-title").textContent = "Top Up Successful!";
+      document.getElementById("success-sub").textContent = "\u00a3" + creditText + " credit loaded - Bay " + boxNum + " started.";
+      document.getElementById("steps-content").innerHTML =
+        '<div class="it">Transaction Details</div>' +
+        '<p class="ix">Paid: <span style="color:#fff;font-weight:700">\u00a3' + amountText + "</span></p>" +
+        '<p class="ix">Credit: <span style="color:#fff;font-weight:700">\u00a3' + creditText + "</span></p>" +
+        '<p class="ix">Bay: <span style="color:#fff;font-weight:700">' + boxNum + "</span></p>" +
+        '<p class="ix">Pay ID: <span style="color:#fff;font-weight:700">' + payId + "</span></p>" +
+        '<p class="ix" style="margin-top:8px">Machine command accepted. You can wash now.</p>';
+
+      document.getElementById("p1").style.display = "none";
+      document.getElementById("p2").style.display = "block";
+      boom();
+    }
+
+    function resetFlow() {
+      document.getElementById("p2").style.display = "none";
+      document.getElementById("p1").style.display = "block";
+      setStatus("", "");
+      setButtonLoading(false, "TOP UP \u00a3" + amt.toFixed(2));
+      var canvas = document.getElementById("cv");
+      var ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function boom() {
+      var wrap = document.getElementById("wrap");
+      var canvas = document.getElementById("cv");
+      var ctx = canvas.getContext("2d");
+      canvas.width = wrap.offsetWidth || window.innerWidth;
+      canvas.height = wrap.offsetHeight || window.innerHeight;
+
+      var colors = ["#ce1126", "#009246", "#ffffff", "#ffd700", "#4fc3f7"];
+      var particles = [];
+      for (var i = 0; i < 100; i++) {
+        particles.push({
+          x: canvas.width / 2,
+          y: canvas.height * 0.3,
+          vx: (Math.random() - 0.5) * 14,
+          vy: (Math.random() - 0.9) * 14,
+          col: colors[Math.floor(Math.random() * colors.length)],
+          r: Math.random() * 5 + 3,
+          a: 1,
+          g: 0.3,
+          rot: Math.random() * 360,
+          rv: (Math.random() - 0.5) * 7,
+        });
+      }
+
+      function frame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var alive = false;
+        particles.forEach(function (p) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += p.g;
+          p.a -= 0.016;
+          p.rot += p.rv;
+          if (p.a <= 0) {
+            return;
+          }
+          alive = true;
+          ctx.save();
+          ctx.globalAlpha = p.a;
+          ctx.fillStyle = p.col;
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rot * Math.PI) / 180);
+          ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r);
+          ctx.restore();
+        });
+        if (alive) {
+          requestAnimationFrame(frame);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      frame();
+    }
+
+    readBoxNumFromQuery();
+    function renderBonusPacks() {
+      var row = document.getElementById("bonus-row");
+      if (!row) {
+        return;
+      }
+      row.innerHTML = "";
+      bonusPacks.forEach(function (pack, index) {
+        var btn = document.createElement("button");
+        btn.className = "bonus-btn";
+        btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
+        btn.onclick = function () { setBonus(index); };
+        row.appendChild(btn);
+      });
+    }
+
+    renderBonusPacks();
+    ui();
+    handleReturnFromStripe();
+  </script>
+</body>
+</html>
