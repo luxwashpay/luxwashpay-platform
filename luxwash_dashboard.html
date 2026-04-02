@@ -334,7 +334,10 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-let API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://127.0.0.1:3000";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || "https://luxwashpay-git-main-luxwashpay.vercel.app";
+if (!API_BASE_URL && origin) {
+  API_BASE_URL = origin;
+}
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
@@ -416,6 +419,7 @@ async function resolveApiBase(){
     if(window.LUXWASH_API_BASE_URL){
       candidates.push(window.LUXWASH_API_BASE_URL);
     }
+    candidates.push("https://luxwashpay-git-main-luxwashpay.vercel.app");
     if(origin){
       candidates.push(origin);
       if(origin.indexOf("://www.") !== -1){

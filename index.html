@@ -559,7 +559,10 @@
     var origin = window.location && window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "";
-    var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://localhost:3000";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || "https://luxwashpay-git-main-luxwashpay.vercel.app";
+    if (!API_BASE_URL && origin) {
+      API_BASE_URL = origin;
+    }
     var apiReadyPromise = null;
     var amt = 2;
     var creditAmt = 2;
@@ -701,6 +704,7 @@
         if (window.LUXWASH_API_BASE_URL) {
           candidates.push(window.LUXWASH_API_BASE_URL);
         }
+        candidates.push("https://luxwashpay-git-main-luxwashpay.vercel.app");
         if (origin) {
           candidates.push(origin);
           if (origin.indexOf("://www.") !== -1) {
