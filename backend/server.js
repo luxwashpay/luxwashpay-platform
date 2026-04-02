@@ -741,7 +741,7 @@ app.post("/api/topup/create-session", async (req, res) => {
       ],
       metadata: {
         box_num: String(boxNum),
-        topup_amount: amount.toFixed(2),
+        topup_amount: amountCharged.toFixed(2),
       },
       payment_intent_data: paymentIntentData,
     });
