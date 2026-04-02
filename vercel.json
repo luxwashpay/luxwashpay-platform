@@ -2,7 +2,6 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index.js" },
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/dashboard.html", "destination": "/dashboard.html" },
     { "source": "/", "destination": "/index.html" },
