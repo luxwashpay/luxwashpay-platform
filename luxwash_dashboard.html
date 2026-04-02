@@ -334,11 +334,8 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-let apiBase = window.LUXWASH_API_BASE_URL || origin;
-if (apiBase && apiBase.indexOf("://www.") !== -1) {
-  apiBase = apiBase.replace("://www.", "://");
-}
-const API_BASE_URL = apiBase || "http://127.0.0.1:3000";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://127.0.0.1:3000";
+let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
@@ -408,6 +405,42 @@ async function fetchJson(url){
     throw new Error("Dashboard API error");
   }
   return await res.json();
+}
+
+async function resolveApiBase(){
+  if(apiReadyPromise){
+    return apiReadyPromise;
+  }
+  apiReadyPromise = (async () => {
+    const candidates = [];
+    if(window.LUXWASH_API_BASE_URL){
+      candidates.push(window.LUXWASH_API_BASE_URL);
+    }
+    if(origin){
+      candidates.push(origin);
+      if(origin.indexOf("://www.") !== -1){
+        candidates.push(origin.replace("://www.", "://"));
+      } else if(origin.indexOf("://") !== -1){
+        const parts = origin.split("://");
+        candidates.push(parts[0] + "://www." + parts[1]);
+      }
+    }
+    candidates.push("https://luxwashpay.com", "https://www.luxwashpay.com");
+    const unique = Array.from(new Set(candidates.filter(Boolean)));
+    for(const base of unique){
+      try{
+        const res = await fetch(base.replace(/\/+$/, "") + "/api/health", { cache: "no-store" });
+        if(res.ok){
+          API_BASE_URL = base.replace(/\/+$/, "");
+          return API_BASE_URL;
+        }
+      } catch (e) {
+        // ignore and try next
+      }
+    }
+    return API_BASE_URL;
+  })();
+  return apiReadyPromise;
 }
 
 function renderKpis(summary){
@@ -748,6 +781,7 @@ function setupSettingsUI(){}
 
 async function loadDashboard(){
   try {
+    await resolveApiBase();
     const query = buildQuery();
     const summary = await fetchJson(API_BASE_URL + "/api/dashboard/summary" + query);
     renderKpis(summary);
@@ -915,8 +949,10 @@ if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
   applyRole();
 }
 renderUsers();
-loadDashboard();
-setInterval(loadDashboard, 180000);
+resolveApiBase().then(() => {
+  loadDashboard();
+  setInterval(loadDashboard, 180000);
+});
 
 if(LOGO_URL){
   document.getElementById("logoImg").src = LOGO_URL;

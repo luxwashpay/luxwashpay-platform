@@ -559,11 +559,8 @@
     var origin = window.location && window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "";
-    var apiBase = window.LUXWASH_API_BASE_URL || origin;
-    if (apiBase && apiBase.indexOf("://www.") !== -1) {
-      apiBase = apiBase.replace("://www.", "://");
-    }
-    var API_BASE_URL = apiBase || "http://localhost:3000";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://localhost:3000";
+    var apiReadyPromise = null;
     var amt = 2;
     var creditAmt = 2;
     var isBusy = false;
@@ -695,11 +692,47 @@
       return data;
     }
 
+    async function resolveApiBase() {
+      if (apiReadyPromise) {
+        return apiReadyPromise;
+      }
+      apiReadyPromise = (async function () {
+        var candidates = [];
+        if (window.LUXWASH_API_BASE_URL) {
+          candidates.push(window.LUXWASH_API_BASE_URL);
+        }
+        if (origin) {
+          candidates.push(origin);
+          if (origin.indexOf("://www.") !== -1) {
+            candidates.push(origin.replace("://www.", "://"));
+          } else if (origin.indexOf("://") !== -1) {
+            var parts = origin.split("://");
+            candidates.push(parts[0] + "://www." + parts[1]);
+          }
+        }
+        candidates.push("https://luxwashpay.com", "https://www.luxwashpay.com");
+        var unique = Array.from(new Set(candidates.filter(Boolean)));
+        for (var i = 0; i < unique.length; i += 1) {
+          var base = unique[i].replace(/\/+$/, "");
+          try {
+            var res = await fetch(base + "/api/health", { cache: "no-store" });
+            if (res.ok) {
+              API_BASE_URL = base;
+              return API_BASE_URL;
+            }
+          } catch (e) {}
+        }
+        return API_BASE_URL;
+      })();
+      return apiReadyPromise;
+    }
+
     async function doTopUp() {
       if (isBusy) {
         return;
       }
 
+      await resolveApiBase();
       setButtonLoading(true, "Checking machine...");
       setStatus("Checking bay availability...", "");
 
@@ -741,6 +774,7 @@
     }
 
     async function handleReturnFromStripe() {
+      await resolveApiBase();
       var params = new URLSearchParams(window.location.search);
       var payment = params.get("payment");
       var sessionId = params.get("session_id");
