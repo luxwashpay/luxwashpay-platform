@@ -559,7 +559,11 @@
     var origin = window.location && window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "";
-    var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://localhost:3000";
+    var apiBase = window.LUXWASH_API_BASE_URL || origin;
+    if (apiBase && apiBase.indexOf("://www.") !== -1) {
+      apiBase = apiBase.replace("://www.", "://");
+    }
+    var API_BASE_URL = apiBase || "http://localhost:3000";
     var amt = 2;
     var creditAmt = 2;
     var isBusy = false;

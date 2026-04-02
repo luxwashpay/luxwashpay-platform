@@ -334,7 +334,11 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-const API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "http://127.0.0.1:3000";
+let apiBase = window.LUXWASH_API_BASE_URL || origin;
+if (apiBase && apiBase.indexOf("://www.") !== -1) {
+  apiBase = apiBase.replace("://www.", "://");
+}
+const API_BASE_URL = apiBase || "http://127.0.0.1:3000";
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
@@ -485,12 +489,17 @@ function renderTransactions(items){
     return;
   }
   items.forEach(tx => {
+    const paid = Number(tx.amount || 0);
+    const credit = Number(tx.creditAmount || paid);
+    const amountDisplay = credit > paid
+      ? `${formatMoney(paid)} → ${formatMoney(credit)}`
+      : formatMoney(paid);
     const statusClass = tx.status === "failed" ? "status fail" : "status";
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${formatDate(tx.createdAt)}</td>
       <td>${tx.boxNum || "-"}</td>
-      <td>${formatMoney(tx.amount)}</td>
+      <td>${amountDisplay}</td>
       <td>${tx.payId || "-"}</td>
       <td><span class="${statusClass}">${tx.status || "ok"}</span></td>
     `;
