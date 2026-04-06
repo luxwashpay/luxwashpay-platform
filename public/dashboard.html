@@ -374,8 +374,7 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-const originNoWww = origin ? origin.replace("://www.", "://") : "";
-let API_BASE_URL = window.LUXWASH_API_BASE_URL || originNoWww || "https://luxwashpay.com";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || "https://luxwashpay.com";
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
@@ -513,12 +512,6 @@ async function resolveApiBase(){
       candidates.push(window.LUXWASH_API_BASE_URL);
     }
     candidates.push("https://luxwashpay.com");
-    if(originNoWww){
-      candidates.push(originNoWww);
-    }
-    if(origin){
-      candidates.push(origin);
-    }
     candidates.push("https://www.luxwashpay.com");
     const unique = Array.from(new Set(candidates.filter(Boolean)));
     for(const base of unique){
