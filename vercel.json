@@ -3,12 +3,6 @@
   "cleanUrls": false,
   "redirects": [
     {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.luxwashpay.com" }],
-      "destination": "https://luxwashpay.com/:path*",
-      "permanent": true
-    },
-    {
       "source": "/dashboard.html",
       "destination": "/dashboard",
       "permanent": true
