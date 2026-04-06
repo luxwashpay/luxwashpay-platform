@@ -345,8 +345,6 @@
     .bay-option.active { border-color: #11b36a; color: #11b36a; }
     .bay-close { width: 100%; background: #2a2a2a; border: none; color: #ddd; padding: 10px; border-radius: 10px; font-size: 12px; cursor: pointer; }
     .bonus-wrap.hidden { display: none; }
-    .bonus-btn.reco { border-color: #11b36a; color: #11b36a; position: relative; }
-    .bonus-btn.reco::after { content: "Recommended"; position: absolute; top: -10px; right: 10px; background: #11b36a; color: #041a0f; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 8px; }
     .sc {
       background: #161616;
       border: 1px solid #252525;
@@ -649,12 +647,20 @@
         if (hintEl) {
           hintEl.textContent = "Choose your bay to continue";
         }
+        var baySelectEl = document.querySelector(".bay-select");
+        if (baySelectEl) {
+          baySelectEl.style.display = "flex";
+        }
         return;
       }
       var parsed = Number(raw);
       if (!Number.isInteger(parsed) || parsed <= 0) {
         selectedBoxNum = null;
         document.getElementById("bay-msg").textContent = "Invalid bay number in QR link";
+        var baySelectEl = document.querySelector(".bay-select");
+        if (baySelectEl) {
+          baySelectEl.style.display = "flex";
+        }
         return;
       }
       selectedBoxNum = parsed;
@@ -662,6 +668,10 @@
       var hintSelected = document.getElementById("bay-hint");
       if (hintSelected) {
         hintSelected.textContent = "Bay " + selectedBoxNum + " selected";
+      }
+      var baySelectEl = document.querySelector(".bay-select");
+      if (baySelectEl) {
+        baySelectEl.style.display = "none";
       }
     }
 
@@ -1043,8 +1053,7 @@
       }
       bonusPacks.forEach(function (pack, index) {
         var btn = document.createElement("button");
-        var isRecommended = bonusPack && Number(pack.pay) === Number(bonusPack);
-        btn.className = "bonus-btn" + (isRecommended ? " reco" : "");
+        btn.className = "bonus-btn";
         btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
         btn.onclick = function () { setBonus(index); };
         row.appendChild(btn);
