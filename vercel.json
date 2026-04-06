@@ -13,6 +13,12 @@
       "permanent": true
     }
   ],
+  "rewrites": [
+    {
+      "source": "/dashboard",
+      "destination": "/dashboard/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/dashboard(.*)",
