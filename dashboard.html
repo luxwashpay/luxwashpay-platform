@@ -374,7 +374,8 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-let API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "https://luxwashpay.com";
+const originNoWww = origin ? origin.replace("://www.", "://") : "";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || originNoWww || "https://luxwashpay.com";
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
@@ -511,17 +512,14 @@ async function resolveApiBase(){
     if(window.LUXWASH_API_BASE_URL){
       candidates.push(window.LUXWASH_API_BASE_URL);
     }
+    candidates.push("https://luxwashpay.com");
+    if(originNoWww){
+      candidates.push(originNoWww);
+    }
     if(origin){
       candidates.push(origin);
-      if(origin.indexOf("://www.") !== -1){
-        candidates.push(origin.replace("://www.", "://"));
-      } else if(origin.indexOf("://") !== -1){
-        const parts = origin.split("://");
-        candidates.push(parts[0] + "://www." + parts[1]);
-      }
     }
-    candidates.push("https://luxwashpay.com", "https://www.luxwashpay.com");
-    candidates.push("https://luxwashpay-git-main-luxwashpay.vercel.app");
+    candidates.push("https://www.luxwashpay.com");
     const unique = Array.from(new Set(candidates.filter(Boolean)));
     for(const base of unique){
       try{

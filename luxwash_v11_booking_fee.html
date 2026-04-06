@@ -585,7 +585,8 @@
     var origin = window.location && window.location.origin && window.location.origin !== "null"
       ? window.location.origin
       : "";
-    var API_BASE_URL = window.LUXWASH_API_BASE_URL || origin || "https://luxwashpay.com";
+    var originNoWww = origin ? origin.replace("://www.", "://") : "";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || originNoWww || "https://luxwashpay.com";
     var apiReadyPromise = null;
     var amt = 2;
     var creditAmt = 2;
@@ -762,17 +763,14 @@
         if (window.LUXWASH_API_BASE_URL) {
           candidates.push(window.LUXWASH_API_BASE_URL);
         }
+        candidates.push("https://luxwashpay.com");
+        if (originNoWww) {
+          candidates.push(originNoWww);
+        }
         if (origin) {
           candidates.push(origin);
-          if (origin.indexOf("://www.") !== -1) {
-            candidates.push(origin.replace("://www.", "://"));
-          } else if (origin.indexOf("://") !== -1) {
-            var parts = origin.split("://");
-            candidates.push(parts[0] + "://www." + parts[1]);
-          }
         }
-        candidates.push("https://luxwashpay.com", "https://www.luxwashpay.com");
-        candidates.push("https://luxwashpay-git-main-luxwashpay.vercel.app");
+        candidates.push("https://www.luxwashpay.com");
         var unique = Array.from(new Set(candidates.filter(Boolean)));
         for (var i = 0; i < unique.length; i += 1) {
           var base = unique[i].replace(/\/+$/, "");
