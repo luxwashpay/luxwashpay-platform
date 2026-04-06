@@ -56,6 +56,8 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .page{max-width:1150px;margin:0 auto;padding:28px}
 .page-title{font-family:'Space Grotesk',sans-serif;font-size:1.65rem;font-weight:700;margin-bottom:6px}
 .page-sub{color:var(--muted);font-size:0.9rem;margin-bottom:24px}
+.dash-error{margin-bottom:18px;padding:12px 14px;border:1px solid rgba(255,77,109,0.4);background:rgba(255,77,109,0.12);color:#ff9fb1;font-size:0.85rem;display:none}
+.dash-error button{margin-left:12px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 10px;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer}
 
 .filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;align-items:flex-end}
 .filter-group{display:flex;flex-direction:column;gap:6px}
@@ -180,6 +182,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
   <div class="page">
     <div class="page-title">QR Payments Overview</div>
     <div class="page-sub">Real-time view of top-ups, bay performance, and automated machine starts.</div>
+    <div class="dash-error" id="dashError">Dashboard offline. Please refresh.</div>
 
     <div class="status-strip" id="status-strip"></div>
 
@@ -394,6 +397,7 @@ let bonusMode = "manual";
 let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
 let bonusPacks = DEFAULT_BONUS_PACKS.slice();
 let latestRecommendation = null;
+let dashboardInterval = null;
 
 const storageKey = "luxwash_dashboard_users";
 const adminKey = "luxwash_dashboard_admin";
@@ -1082,9 +1086,27 @@ async function loadDashboard(){
         baySelect.appendChild(option);
       });
     }
+    const err = document.getElementById("dashError");
+    if(err) err.style.display = "none";
   } catch (error) {
-    document.body.innerHTML = '<div style="color:#fff;padding:40px;font-family:Manrope">Dashboard offline. Ensure backend is running at ' + API_BASE_URL + '.</div>';
+    const err = document.getElementById("dashError");
+    if(err){
+      err.innerHTML = 'Dashboard offline. Ensure backend is running at ' + API_BASE_URL + '. <button onclick="retryDashboard()">Retry</button>';
+      err.style.display = "block";
+    }
   }
+}
+
+function retryDashboard(){
+  loadDashboard();
+}
+
+function startDashboard(){
+  if(dashboardInterval){
+    return;
+  }
+  loadDashboard();
+  dashboardInterval = setInterval(loadDashboard, 180000);
 }
 
 function unlockIfPinMatches(){
@@ -1102,6 +1124,7 @@ function unlockIfPinMatches(){
     localStorage.setItem("luxwash_dash_unlocked", "true");
     document.getElementById("loginScreen").style.display = "none";
     applyRole();
+    startDashboard();
   } else {
     document.getElementById("pinErr").style.display = "block";
   }
@@ -1200,12 +1223,9 @@ loadSettings();
 setupSettingsUI();
 if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
   applyRole();
+  startDashboard();
 }
 renderUsers();
-resolveApiBase().then(() => {
-  loadDashboard();
-  setInterval(loadDashboard, 180000);
-});
 
 if(LOGO_URL){
   document.getElementById("logoImg").src = LOGO_URL;
