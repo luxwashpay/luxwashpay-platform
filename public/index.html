@@ -1059,8 +1059,12 @@
         if (res.ok) {
           var data = await res.json();
           applySettings(data);
+        } else {
+          setBayOptions(bayOptions);
         }
-      } catch (e) {}
+      } catch (e) {
+        setBayOptions(bayOptions);
+      }
     }
 
     function renderBonusPacks() {
@@ -1087,6 +1091,8 @@
 
     async function initPage() {
       readBoxNumFromQuery();
+      setBayOptions(bayOptions);
+      renderBayOptions();
       await resolveApiBase();
       await loadSettings();
       renderBonusPacks();
