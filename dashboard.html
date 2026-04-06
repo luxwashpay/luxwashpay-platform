@@ -409,6 +409,7 @@ let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
 let bonusPacks = DEFAULT_BONUS_PACKS.slice();
 let latestRecommendation = null;
 let dashboardInterval = null;
+let settingsDirty = false;
 
 const storageKey = "luxwash_dashboard_users";
 const adminKey = "luxwash_dashboard_admin";
@@ -486,6 +487,7 @@ function applyRemoteSettings(settings){
   if(Array.isArray(settings.bays) && settings.bays.length){
     dashboardBays = settings.bays.map(String);
   }
+  settingsDirty = false;
 }
 
 async function loadRemoteSettings(){
@@ -662,6 +664,11 @@ function updateBonusControls(){
   const bayInput = document.getElementById("bonusBaysInput");
   if(bayInput) bayInput.value = dashboardBays.join(",");
   renderBonusPackButtons();
+  renderBonusRecommendation(null);
+}
+
+function markSettingsDirty(){
+  settingsDirty = true;
 }
 
 function renderBonusRecommendation(reco){
@@ -916,7 +923,14 @@ function renderStatusStrip(transactions){
   });
 
   strip.innerHTML = "";
-  const bays = dashboardBays.length ? dashboardBays : Array.from(byBay.keys());
+  let bays = dashboardBays.length ? dashboardBays : Array.from(byBay.keys());
+  if(!bays.length && DEFAULT_BAYS.length){
+    bays = DEFAULT_BAYS.slice();
+  } else if(DEFAULT_BAYS.length){
+    // Ensure we always show all default bays unless explicitly removed
+    const merged = Array.from(new Set([...bays, ...DEFAULT_BAYS]));
+    bays = merged;
+  }
   if(!bays.length){
     strip.innerHTML = '<div class="muted">No bay status yet</div>';
     return;
@@ -1058,6 +1072,7 @@ function setupSettingsUI(){
     bonusToggle.checked = bonusEnabled;
     bonusToggle.addEventListener("change", () => {
       bonusEnabled = bonusToggle.checked;
+      markSettingsDirty();
       updateBonusControls();
     });
   }
@@ -1067,6 +1082,7 @@ function setupSettingsUI(){
     modeSelect.value = bonusMode;
     modeSelect.addEventListener("change", () => {
       bonusMode = modeSelect.value;
+      markSettingsDirty();
     });
   }
 
@@ -1076,6 +1092,7 @@ function setupSettingsUI(){
       if(latestRecommendation?.pack){
         bonusMode = "recommended";
         bonusPack = latestRecommendation.pack.pay;
+        markSettingsDirty();
         updateBonusControls();
       }
     });
@@ -1087,13 +1104,22 @@ function setupSettingsUI(){
       saveBonusSettings();
     });
   }
+
+  const bayInput = document.getElementById("bonusBaysInput");
+  if(bayInput){
+    bayInput.addEventListener("input", () => {
+      markSettingsDirty();
+    });
+  }
 }
 
 async function loadDashboard(){
   try {
     await resolveApiBase();
-    await loadRemoteSettings();
-    updateBonusControls();
+    if(!settingsDirty){
+      await loadRemoteSettings();
+      updateBonusControls();
+    }
     const query = buildQuery();
     const summary = await fetchJson(API_BASE_URL + "/api/dashboard/summary" + query);
     renderKpis(summary);
@@ -1142,6 +1168,10 @@ async function loadDashboard(){
       err.innerHTML = 'Dashboard temporarily offline. <button onclick="retryDashboard()">Retry</button>';
       err.style.display = "block";
     }
+    renderStatusStrip([]);
+    renderForecast([]);
+    renderHourlyDemand([]);
+    renderHeatmap([]);
     renderBonusRecommendation(null);
   }
 }
@@ -1154,6 +1184,10 @@ function startDashboard(){
   if(dashboardInterval){
     return;
   }
+  renderStatusStrip([]);
+  renderForecast([]);
+  renderHourlyDemand([]);
+  renderHeatmap([]);
   loadDashboard();
   dashboardInterval = setInterval(loadDashboard, 180000);
 }
