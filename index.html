@@ -588,7 +588,7 @@
     var apexOrigin = origin && origin.indexOf("://www.") !== -1
       ? origin.replace("://www.", "://")
       : "";
-    var API_BASE_URL = window.LUXWASH_API_BASE_URL || apexOrigin || origin || "https://luxwashpay.com";
+    var API_BASE_URL = window.LUXWASH_API_BASE_URL || "";
     var apiReadyPromise = null;
     var amt = 2;
     var creditAmt = 2;
@@ -762,6 +762,13 @@
       }
       apiReadyPromise = (async function () {
         var candidates = [];
+        try {
+          var sameRes = await fetch("/api/health", { cache: "no-store" });
+          if (sameRes.ok) {
+            API_BASE_URL = "";
+            return API_BASE_URL;
+          }
+        } catch (e) {}
         if (origin) {
           candidates.push(origin);
         }

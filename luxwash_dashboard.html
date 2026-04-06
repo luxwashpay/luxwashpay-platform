@@ -389,7 +389,7 @@ const origin = window.location && window.location.origin && window.location.orig
 const apexOrigin = origin && origin.indexOf("://www.") !== -1
   ? origin.replace("://www.", "://")
   : "";
-let API_BASE_URL = window.LUXWASH_API_BASE_URL || apexOrigin || origin || "https://luxwashpay.com";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || "";
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
@@ -526,6 +526,14 @@ async function resolveApiBase(){
   }
   apiReadyPromise = (async () => {
     const candidates = [];
+    // Prefer same-origin relative API to avoid CORS/redirect issues.
+    try{
+      const res = await fetch("/api/health", { cache: "no-store" });
+      if(res.ok){
+        API_BASE_URL = "";
+        return API_BASE_URL;
+      }
+    }catch(e){}
     if(origin){
       candidates.push(origin);
     }
