@@ -433,6 +433,17 @@ function formatDate(iso){
   return d.toLocaleString();
 }
 
+function bayLabel(value){
+  if(!value){
+    return "Bay";
+  }
+  const idx = dashboardBays.findIndex(bay => String(bay) === String(value));
+  if(idx >= 0){
+    return `Bay ${idx + 1}`;
+  }
+  return `Bay ${value}`;
+}
+
 function loadSettings(){
   const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
   staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
@@ -696,7 +707,7 @@ function renderBays(byBay){
   keys.sort((a,b)=>Number(a)-Number(b)).forEach(key => {
     const item = document.createElement("div");
     item.className = "bay-item";
-    item.innerHTML = `<div class="bay-name">Bay ${key}</div><div class="bay-value">${formatMoney(byBay[key])}</div>`;
+    item.innerHTML = `<div class="bay-name">${bayLabel(key)}</div><div class="bay-value">${formatMoney(byBay[key])}</div>`;
     list.appendChild(item);
   });
 }
@@ -716,12 +727,12 @@ function renderBayChart(byBay){
     const bar = document.createElement("div");
     bar.className = "bar";
     bar.style.height = (Number(byBay[key] || 0) / max * 120 + 8) + "px";
-    bar.title = `Bay ${key} • ${formatMoney(byBay[key])}`;
+    bar.title = `${bayLabel(key)} • ${formatMoney(byBay[key])}`;
     bars.appendChild(bar);
 
     const label = document.createElement("div");
     label.className = "bar-label";
-    label.textContent = key;
+    label.textContent = bayLabel(key).replace("Bay ", "");
     labels.appendChild(label);
   });
 }
@@ -743,7 +754,7 @@ function renderTransactions(items){
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${formatDate(tx.createdAt)}</td>
-      <td>${tx.boxNum || "-"}</td>
+      <td>${tx.boxNum ? bayLabel(tx.boxNum) : "-"}</td>
       <td>${amountDisplay}</td>
       <td>${tx.payId || "-"}</td>
       <td><span class="${statusClass}">${tx.status || "ok"}</span></td>
@@ -763,7 +774,7 @@ function renderAlerts(items){
     const alert = document.createElement("div");
     alert.className = "alert";
     alert.innerHTML = `
-      <strong>Bay ${tx.boxNum || "-"} • ${formatMoney(tx.amount)}</strong>
+      <strong>${tx.boxNum ? bayLabel(tx.boxNum) : "Bay -"} • ${formatMoney(tx.amount)}</strong>
       <small>${tx.error || "Machine did not start"}</small>
     `;
     list.appendChild(alert);
@@ -871,9 +882,8 @@ function renderStatusStrip(transactions){
   bays.forEach((bay, index) => {
     const key = String(bay);
     const last = byBay.get(key);
-    const isLongId = key.length > 3;
-    const title = isLongId ? `Bay ${index + 1}` : `Bay ${key}`;
-    const metaPrefix = isLongId ? `Box ${key} • ` : "";
+    const title = bayLabel(key);
+    const metaPrefix = `Box ${key} • `;
     let statusClass = "warn";
     let statusText = "Idle";
     let subText = metaPrefix + "No recent payments";
@@ -1077,7 +1087,7 @@ async function loadDashboard(){
       source.sort((a,b)=>Number(a)-Number(b)).forEach((key, index) => {
         const option = document.createElement("option");
         option.value = key;
-        option.textContent = keys.length ? ("Bay " + key) : ("Bay " + (index + 1));
+        option.textContent = keys.length ? bayLabel(key) : ("Bay " + (index + 1));
         baySelect.appendChild(option);
       });
     }

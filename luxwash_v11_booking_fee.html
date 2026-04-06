@@ -664,15 +664,26 @@
         return;
       }
       selectedBoxNum = parsed;
-      document.getElementById("bay-msg").textContent = "Bay " + selectedBoxNum + " selected";
+      document.getElementById("bay-msg").textContent = bayLabel(selectedBoxNum) + " selected";
       var hintSelected = document.getElementById("bay-hint");
       if (hintSelected) {
-        hintSelected.textContent = "Bay " + selectedBoxNum + " selected";
+        hintSelected.textContent = bayLabel(selectedBoxNum) + " selected";
       }
       var baySelectEl = document.querySelector(".bay-select");
       if (baySelectEl) {
         baySelectEl.style.display = "none";
       }
+    }
+
+    function bayLabel(value) {
+      if (!value) {
+        return "Bay";
+      }
+      var idx = bayOptions.findIndex(function (bay) { return String(bay) === String(value); });
+      if (idx >= 0) {
+        return "Bay " + (idx + 1);
+      }
+      return "Bay " + value;
     }
 
     function chg(delta) {
@@ -784,6 +795,10 @@
       }
 
       await resolveApiBase();
+      if (!selectedBoxNum) {
+        setStatus("Please choose a bay to continue.", "error");
+        return;
+      }
       setButtonLoading(true, "Checking machine...");
       setStatus("Checking bay availability...", "");
 
@@ -965,10 +980,10 @@
         return;
       }
       grid.innerHTML = "";
-      bayOptions.forEach(function (bay) {
+      bayOptions.forEach(function (bay, index) {
         var btn = document.createElement("button");
         btn.className = "bay-option" + (String(selectedBoxNum) === String(bay) ? " active" : "");
-        btn.textContent = "Bay " + bay;
+        btn.textContent = "Bay " + (index + 1);
         btn.onclick = function () { applyBaySelection(bay); };
         grid.appendChild(btn);
       });
