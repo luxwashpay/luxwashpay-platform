@@ -1,6 +1,14 @@
 {
   "version": 2,
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.luxwashpay.com" }],
+      "destination": "https://luxwashpay.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/dashboard.html", "destination": "/dashboard.html" },
