@@ -377,7 +377,13 @@ function normalizeBays(value){
 const origin = window.location && window.location.origin && window.location.origin !== "null"
   ? window.location.origin
   : "";
-let API_BASE_URL = window.LUXWASH_API_BASE_URL || "https://luxwashpay.com";
+const apexOrigin = origin && origin.indexOf("://www.") !== -1
+  ? origin.replace("://www.", "://")
+  : "";
+if(origin && origin.indexOf("://www.") !== -1){
+  window.location.replace(apexOrigin + window.location.pathname + window.location.search + window.location.hash);
+}
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || apexOrigin || origin || "https://luxwashpay.com";
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
@@ -512,8 +518,24 @@ async function resolveApiBase(){
   }
   apiReadyPromise = (async () => {
     const candidates = [];
+    if(origin){
+      candidates.push(origin);
+    }
+    if(apexOrigin && apexOrigin !== origin){
+      candidates.push(apexOrigin);
+    }
+    if(origin && origin.indexOf("://www.") === -1 && origin.indexOf("://") !== -1){
+      candidates.push(origin.replace("://", "://www."));
+    }
     if(window.LUXWASH_API_BASE_URL){
       candidates.push(window.LUXWASH_API_BASE_URL);
+    }
+    if(window.LUXWASH_API_FALLBACKS){
+      if(Array.isArray(window.LUXWASH_API_FALLBACKS)){
+        candidates = candidates.concat(window.LUXWASH_API_FALLBACKS);
+      } else if(typeof window.LUXWASH_API_FALLBACKS === "string"){
+        candidates = candidates.concat(window.LUXWASH_API_FALLBACKS.split(",").map(entry => entry.trim()));
+      }
     }
     candidates.push("https://luxwashpay.com");
     candidates.push("https://www.luxwashpay.com");
@@ -1091,7 +1113,7 @@ async function loadDashboard(){
   } catch (error) {
     const err = document.getElementById("dashError");
     if(err){
-      err.innerHTML = 'Dashboard offline. Ensure backend is running at ' + API_BASE_URL + '. <button onclick="retryDashboard()">Retry</button>';
+      err.innerHTML = 'Dashboard temporarily offline. <button onclick="retryDashboard()">Retry</button>';
       err.style.display = "block";
     }
   }
