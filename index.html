@@ -332,6 +332,21 @@
     .m { color: #444; font-size: 11px; }
     .sec { color: #333; font-size: 11px; text-align: center; }
     .ft { color: #2a2a2a; font-size: 11px; text-align: center; }
+    .bay-select { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 10px; }
+    .bay-btn { background: #11b36a; border: none; color: #041a0f; font-weight: 800; padding: 10px 16px; border-radius: 10px; font-size: 12px; letter-spacing: 0.8px; cursor: pointer; box-shadow: 0 6px 18px rgba(17, 179, 106, 0.25); }
+    .bay-btn:hover { filter: brightness(1.05); }
+    .bay-hint { color: #6f6f6f; font-size: 11px; }
+    .bay-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 999; }
+    .bay-modal.show { display: flex; }
+    .bay-card { background: #101010; border: 1px solid #242424; border-radius: 18px; padding: 20px; width: min(360px, 90vw); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+    .bay-title { color: #fff; font-weight: 800; font-size: 16px; margin-bottom: 12px; }
+    .bay-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .bay-option { background: #1a1a1a; border: 1px solid #2a2a2a; color: #ddd; padding: 10px; border-radius: 12px; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .bay-option.active { border-color: #11b36a; color: #11b36a; }
+    .bay-close { width: 100%; background: #2a2a2a; border: none; color: #ddd; padding: 10px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+    .bonus-wrap.hidden { display: none; }
+    .bonus-btn.reco { border-color: #11b36a; color: #11b36a; position: relative; }
+    .bonus-btn.reco::after { content: "Recommended"; position: absolute; top: -10px; right: 10px; background: #11b36a; color: #041a0f; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 8px; }
     .sc {
       background: #161616;
       border: 1px solid #252525;
@@ -482,6 +497,11 @@
 
           <div class="divider"></div>
 
+          <div class="bay-select">
+            <button class="bay-btn" onclick="openBayPicker()">Select Bay</button>
+            <span class="bay-hint" id="bay-hint">Choose your bay to continue</span>
+          </div>
+
           <div class="amt-label">TOP UP YOUR CREDIT</div>
           <div class="amt-hint">Select amount and continue to secure checkout</div>
 
@@ -502,7 +522,7 @@
             <button class="pre" onclick="setAmt(20)">&pound;20</button>
           </div>
 
-          <div class="bonus-wrap">
+          <div class="bonus-wrap" id="bonus-section">
             <div class="bonus-title">Bonus Packs (extra credit)</div>
             <div class="bonus-row" id="bonus-row"></div>
             <div class="bonus-note">Limited time offer • Bonus varies by pack</div>
@@ -552,8 +572,16 @@
 
         <p class="ft">LuxWash Walsall &bull; Open 24/7</p>
       </div>
+      </div>
     </div>
-  </div>
+
+    <div class="bay-modal" id="bay-modal">
+      <div class="bay-card">
+        <div class="bay-title">Select your bay</div>
+        <div class="bay-grid" id="bay-grid"></div>
+        <button class="bay-close" onclick="closeBayPicker()">Close</button>
+      </div>
+    </div>
 
   <script>
     var origin = window.location && window.location.origin && window.location.origin !== "null"
@@ -566,6 +594,10 @@
     var isBusy = false;
     var selectedBoxNum = null;
     var presetValues = [2, 3, 5, 10, 20];
+    var bonusEnabled = true;
+    var bonusMode = "manual";
+    var bonusPack = null;
+    var bayOptions = [];
     var bonusPacks = [
       { pay: 6, credit: 7 },
       { pay: 10, credit: 11 },
@@ -612,7 +644,11 @@
       var raw = params.get("box_num") || params.get("box");
       if (!raw) {
         selectedBoxNum = null;
-        document.getElementById("bay-msg").textContent = "Test mode: default bay from backend env";
+        document.getElementById("bay-msg").textContent = "No bay selected. Tap Select Bay.";
+        var hintEl = document.getElementById("bay-hint");
+        if (hintEl) {
+          hintEl.textContent = "Choose your bay to continue";
+        }
         return;
       }
       var parsed = Number(raw);
@@ -623,6 +659,10 @@
       }
       selectedBoxNum = parsed;
       document.getElementById("bay-msg").textContent = "Bay " + selectedBoxNum + " selected";
+      var hintSelected = document.getElementById("bay-hint");
+      if (hintSelected) {
+        hintSelected.textContent = "Bay " + selectedBoxNum + " selected";
+      }
     }
 
     function chg(delta) {
@@ -899,25 +939,129 @@
       frame();
     }
 
-    readBoxNumFromQuery();
+    function setBayOptions(list) {
+      if (Array.isArray(list) && list.length) {
+        bayOptions = list.map(String);
+      } else if (Array.isArray(window.LUXWASH_BAYS) && window.LUXWASH_BAYS.length) {
+        bayOptions = window.LUXWASH_BAYS.map(String);
+      } else {
+        bayOptions = ["260529", "260530", "260531", "260532", "260533"];
+      }
+    }
+
+    function renderBayOptions() {
+      var grid = document.getElementById("bay-grid");
+      if (!grid) {
+        return;
+      }
+      grid.innerHTML = "";
+      bayOptions.forEach(function (bay) {
+        var btn = document.createElement("button");
+        btn.className = "bay-option" + (String(selectedBoxNum) === String(bay) ? " active" : "");
+        btn.textContent = "Bay " + bay;
+        btn.onclick = function () { applyBaySelection(bay); };
+        grid.appendChild(btn);
+      });
+    }
+
+    function openBayPicker() {
+      renderBayOptions();
+      var modal = document.getElementById("bay-modal");
+      if (modal) {
+        modal.classList.add("show");
+      }
+    }
+
+    function closeBayPicker() {
+      var modal = document.getElementById("bay-modal");
+      if (modal) {
+        modal.classList.remove("show");
+      }
+    }
+
+    function applyBaySelection(bay) {
+      var target = String(bay);
+      var url = new URL(window.location.href);
+      url.searchParams.set("box_num", target);
+      history.replaceState({}, "", url.toString());
+      selectedBoxNum = Number(target);
+      readBoxNumFromQuery();
+      closeBayPicker();
+    }
+
+    function applySettings(settings) {
+      if (settings && typeof settings === "object") {
+        if (typeof settings.bonusEnabled === "boolean") {
+          bonusEnabled = settings.bonusEnabled;
+        }
+        if (settings.bonusMode === "manual" || settings.bonusMode === "recommended") {
+          bonusMode = settings.bonusMode;
+        }
+        if (Array.isArray(settings.bonusPacks) && settings.bonusPacks.length) {
+          bonusPacks = settings.bonusPacks.map(function (pack) {
+            return { pay: Number(pack.pay), credit: Number(pack.credit) };
+          }).filter(function (pack) {
+            return Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay;
+          });
+        }
+        if (Number.isFinite(Number(settings.bonusPack))) {
+          bonusPack = Number(settings.bonusPack);
+        }
+        if (Array.isArray(settings.bays) && settings.bays.length) {
+          setBayOptions(settings.bays);
+        }
+      }
+      if (!bonusEnabled) {
+        selectedBonusIndex = -1;
+        creditAmt = amt;
+      }
+      setBayOptions(bayOptions);
+    }
+
+    async function loadSettings() {
+      try {
+        var res = await fetch(API_BASE_URL + "/api/settings", { cache: "no-store" });
+        if (res.ok) {
+          var data = await res.json();
+          applySettings(data);
+        }
+      } catch (e) {}
+    }
+
     function renderBonusPacks() {
       var row = document.getElementById("bonus-row");
+      var section = document.getElementById("bonus-section");
+      if (section) {
+        section.classList.toggle("hidden", !bonusEnabled);
+      }
       if (!row) {
         return;
       }
       row.innerHTML = "";
+      if (!bonusEnabled) {
+        return;
+      }
       bonusPacks.forEach(function (pack, index) {
         var btn = document.createElement("button");
-        btn.className = "bonus-btn";
+        var isRecommended = bonusPack && Number(pack.pay) === Number(bonusPack);
+        btn.className = "bonus-btn" + (isRecommended ? " reco" : "");
         btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
         btn.onclick = function () { setBonus(index); };
         row.appendChild(btn);
       });
     }
 
-    renderBonusPacks();
-    ui();
-    handleReturnFromStripe();
+    async function initPage() {
+      readBoxNumFromQuery();
+      await resolveApiBase();
+      await loadSettings();
+      renderBonusPacks();
+      renderBayOptions();
+      ui();
+      handleReturnFromStripe();
+    }
+
+    initPage();
   </script>
 </body>
 </html>

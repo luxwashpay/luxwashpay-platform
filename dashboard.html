@@ -138,6 +138,14 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .user-list{display:grid;gap:10px}
 .user-card{padding:10px 12px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .user-card span{font-size:0.8rem}
+.bonus-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.bonus-grid{grid-template-columns:1fr}}
+.toggle-row{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem}
+.bonus-pack-row{display:flex;gap:8px;flex-wrap:wrap}
+.bonus-pack-btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--muted);font-size:0.75rem;cursor:pointer}
+.bonus-pack-btn.active{border-color:var(--green);color:var(--green)}
+.bonus-rec{font-size:0.9rem;color:var(--white);font-weight:600}
+.bonus-insight{padding:12px;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.85rem;color:var(--muted)}
 .user-btn{border:1px solid var(--border);background:transparent;color:var(--muted);padding:6px 10px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
 
 .footer{margin-top:26px;color:var(--muted-2);font-size:0.7rem;text-align:center}
@@ -286,6 +294,38 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
+    <div class="card" id="bonusCard" style="margin-top:18px">
+      <div class="card-title">Bonus Pack Recommendations</div>
+      <div class="bonus-grid">
+        <div>
+          <div class="filter-label">Status</div>
+          <label class="toggle-row">
+            <input type="checkbox" id="bonusEnabledToggle" />
+            Enable bonus packs on live page
+          </label>
+          <div class="filter-label" style="margin-top:12px">Mode</div>
+          <select class="filter-select" id="bonusModeSelect">
+            <option value="manual">Manual</option>
+            <option value="recommended">Recommended</option>
+          </select>
+          <div class="filter-label" style="margin-top:12px">Manual Pack</div>
+          <div class="bonus-pack-row" id="bonusPackRow"></div>
+          <div class="filter-label" style="margin-top:12px">Recommended Pack</div>
+          <div class="bonus-rec" id="bonusRecText">Calculating...</div>
+          <button class="filter-btn" id="applyBonusRec" style="margin-top:10px">Apply Recommendation</button>
+          <button class="filter-btn" id="saveBonusSettings" style="margin-top:10px">Save to Live Page</button>
+          <div class="disclaimer">Not guaranteed — recommendation based on recent top-ups.</div>
+        </div>
+        <div>
+          <div class="filter-label">Bay List (comma separated)</div>
+          <input class="filter-input" id="bonusBaysInput" placeholder="260529,260530,260531" />
+          <div class="filter-label" style="margin-top:12px">Demand Insight</div>
+          <div class="bonus-insight" id="bonusInsight">Loading...</div>
+          <div class="disclaimer" id="bonusInsightNote"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card" id="usersCard" style="margin-top:18px">
       <div class="card-title">Users & PIN Settings</div>
       <div class="users-grid">
@@ -341,9 +381,19 @@ const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
 const DEFAULT_BAYS = ["260529", "260530", "260531", "260532", "260533"];
 const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
+const DEFAULT_BONUS_PACKS = [
+  { pay: 6, credit: 7 },
+  { pay: 10, credit: 11 },
+  { pay: 20, credit: 23 }
+];
 let dashboardBays = DEFAULT_BAYS.slice();
 let bayAlertMinutes = DEFAULT_MINUTES;
 let staffFiltersEnabled = true;
+let bonusEnabled = true;
+let bonusMode = "manual";
+let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
+let bonusPacks = DEFAULT_BONUS_PACKS.slice();
+let latestRecommendation = null;
 
 const storageKey = "luxwash_dashboard_users";
 const adminKey = "luxwash_dashboard_admin";
@@ -386,6 +436,40 @@ function formatDate(iso){
 function loadSettings(){
   const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
   staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
+}
+
+function applyRemoteSettings(settings){
+  if(!settings || typeof settings !== "object"){
+    return;
+  }
+  if(typeof settings.bonusEnabled === "boolean"){
+    bonusEnabled = settings.bonusEnabled;
+  }
+  if(settings.bonusMode === "manual" || settings.bonusMode === "recommended"){
+    bonusMode = settings.bonusMode;
+  }
+  if(Array.isArray(settings.bonusPacks) && settings.bonusPacks.length){
+    bonusPacks = settings.bonusPacks.map(pack => ({
+      pay: Number(pack.pay),
+      credit: Number(pack.credit)
+    })).filter(pack => Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay);
+  }
+  if(Number.isFinite(Number(settings.bonusPack))){
+    bonusPack = Number(settings.bonusPack);
+  }
+  if(Array.isArray(settings.bays) && settings.bays.length){
+    dashboardBays = settings.bays.map(String);
+  }
+}
+
+async function loadRemoteSettings(){
+  try{
+    await resolveApiBase();
+    const settings = await fetchJson(API_BASE_URL + "/api/settings");
+    applyRemoteSettings(settings);
+  }catch(e){
+    // ignore
+  }
 }
 
 function timeAgo(ts){
@@ -453,6 +537,133 @@ function renderKpis(summary){
   document.getElementById("kpi-week-count").textContent = summary.counts.week + " transactions";
   document.getElementById("kpi-month-count").textContent = summary.counts.month + " transactions";
   document.getElementById("kpi-all-count").textContent = summary.counts.all + " transactions";
+}
+
+function median(values){
+  if(!values.length) return 0;
+  const sorted = values.slice().sort((a,b)=>a-b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function recommendBonusPack(transactions){
+  const now = Date.now();
+  const last30 = transactions.filter(tx => {
+    if(!tx || !tx.createdAt) return false;
+    const ts = new Date(tx.createdAt).getTime();
+    return ts >= now - 30 * 24 * 60 * 60 * 1000;
+  }).filter(tx => tx.status !== "failed");
+  const amounts = last30.map(tx => Number(tx.amount || 0)).filter(v => Number.isFinite(v) && v > 0);
+  const medianAmount = median(amounts);
+  let recommended = bonusPacks[0];
+  if(medianAmount){
+    recommended = bonusPacks.reduce((best, pack) => {
+      const currentDiff = Math.abs(pack.pay - medianAmount);
+      const bestDiff = Math.abs(best.pay - medianAmount);
+      return currentDiff < bestDiff ? pack : best;
+    }, bonusPacks[0]);
+  }
+
+  const dailyTotals = {};
+  last30.forEach(tx => {
+    const dayKey = toDateKey(tx.createdAt);
+    dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + Number(tx.amount || 0);
+  });
+  const totals = Object.values(dailyTotals);
+  const avgDay = totals.length ? totals.reduce((a,b)=>a+b,0) / totals.length : 0;
+  const todayKey = toDateKey(new Date());
+  const todayTotal = dailyTotals[todayKey] || 0;
+  const slowDay = avgDay > 0 && todayTotal < avgDay * 0.85;
+
+  return {
+    pack: recommended,
+    medianAmount,
+    avgDay,
+    todayTotal,
+    slowDay
+  };
+}
+
+function renderBonusPackButtons(){
+  const row = document.getElementById("bonusPackRow");
+  if(!row) return;
+  row.innerHTML = "";
+  bonusPacks.forEach(pack => {
+    const btn = document.createElement("button");
+    btn.className = "bonus-pack-btn" + (Number(pack.pay) === Number(bonusPack) ? " active" : "");
+    btn.textContent = `£${pack.pay} → £${pack.credit.toFixed(2)}`;
+    btn.onclick = () => {
+      bonusPack = pack.pay;
+      renderBonusPackButtons();
+    };
+    row.appendChild(btn);
+  });
+}
+
+function updateBonusControls(){
+  const toggle = document.getElementById("bonusEnabledToggle");
+  const modeSelect = document.getElementById("bonusModeSelect");
+  if(toggle) toggle.checked = bonusEnabled;
+  if(modeSelect) modeSelect.value = bonusMode;
+  const bayInput = document.getElementById("bonusBaysInput");
+  if(bayInput) bayInput.value = dashboardBays.join(",");
+  renderBonusPackButtons();
+}
+
+function renderBonusRecommendation(reco){
+  const recEl = document.getElementById("bonusRecText");
+  const insight = document.getElementById("bonusInsight");
+  const note = document.getElementById("bonusInsightNote");
+  if(!reco){
+    if(recEl) recEl.textContent = "Not enough data yet.";
+    if(insight) insight.textContent = "No data available yet.";
+    if(note) note.textContent = "";
+    return;
+  }
+  if(recEl){
+    recEl.textContent = `Recommended: £${reco.pack.pay} → £${reco.pack.credit.toFixed(2)} (median top-up £${reco.medianAmount.toFixed(2)})`;
+  }
+  if(insight){
+    if(reco.slowDay){
+      insight.textContent = "Slow day detected. Bonus packs can help lift demand.";
+    } else {
+      insight.textContent = "Demand looks normal. Bonus packs can still increase average spend.";
+    }
+  }
+  if(note){
+    note.textContent = reco.avgDay ? `Avg/day £${reco.avgDay.toFixed(2)} • Today £${reco.todayTotal.toFixed(2)}` : "Waiting for more data.";
+  }
+}
+
+async function saveBonusSettings(){
+  try{
+    await resolveApiBase();
+    const bayInput = document.getElementById("bonusBaysInput");
+    if(bayInput){
+      const list = bayInput.value.split(",").map(v => v.trim()).filter(Boolean);
+      if(list.length){
+        dashboardBays = list;
+      }
+    }
+    const payload = {
+      bonusEnabled,
+      bonusMode,
+      bonusPack,
+      bonusPacks,
+      bays: dashboardBays,
+      pin: getAdminPin()
+    };
+    const res = await fetchJson(API_BASE_URL + "/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    applyRemoteSettings(res);
+    updateBonusControls();
+    alert("Bonus settings saved to live page");
+  }catch(e){
+    alert("Unable to save bonus settings: " + e.message);
+  }
 }
 
 function renderChart(last7){
@@ -778,11 +989,58 @@ function buildQuery(){
   return query ? "?" + query : "";
 }
 
-function setupSettingsUI(){}
+function setupSettingsUI(){
+  const staffToggle = document.getElementById("settingsStaffFilters");
+  if(staffToggle){
+    staffToggle.checked = staffFiltersEnabled;
+    staffToggle.addEventListener("change", () => {
+      staffFiltersEnabled = staffToggle.checked;
+      localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, String(staffFiltersEnabled));
+      applyRole();
+    });
+  }
+
+  const bonusToggle = document.getElementById("bonusEnabledToggle");
+  if(bonusToggle){
+    bonusToggle.checked = bonusEnabled;
+    bonusToggle.addEventListener("change", () => {
+      bonusEnabled = bonusToggle.checked;
+      updateBonusControls();
+    });
+  }
+
+  const modeSelect = document.getElementById("bonusModeSelect");
+  if(modeSelect){
+    modeSelect.value = bonusMode;
+    modeSelect.addEventListener("change", () => {
+      bonusMode = modeSelect.value;
+    });
+  }
+
+  const applyRec = document.getElementById("applyBonusRec");
+  if(applyRec){
+    applyRec.addEventListener("click", () => {
+      if(latestRecommendation?.pack){
+        bonusMode = "recommended";
+        bonusPack = latestRecommendation.pack.pay;
+        updateBonusControls();
+      }
+    });
+  }
+
+  const saveBtn = document.getElementById("saveBonusSettings");
+  if(saveBtn){
+    saveBtn.addEventListener("click", () => {
+      saveBonusSettings();
+    });
+  }
+}
 
 async function loadDashboard(){
   try {
     await resolveApiBase();
+    await loadRemoteSettings();
+    updateBonusControls();
     const query = buildQuery();
     const summary = await fetchJson(API_BASE_URL + "/api/dashboard/summary" + query);
     renderKpis(summary);
@@ -793,6 +1051,8 @@ async function loadDashboard(){
     const txQuery = query ? query + "&limit=50" : "?limit=50";
     const tx = await fetchJson(API_BASE_URL + "/api/dashboard/transactions" + txQuery);
     renderTransactions(tx.items || []);
+    latestRecommendation = recommendBonusPack(tx.items || []);
+    renderBonusRecommendation(latestRecommendation);
 
     const alertsQuery = query ? query + "&limit=10" : "?limit=10";
     const alerts = await fetchJson(API_BASE_URL + "/api/dashboard/alerts" + alertsQuery);
@@ -849,10 +1109,13 @@ function unlockIfPinMatches(){
 function applyRole(){
   const role = localStorage.getItem("luxwash_dash_role") || "staff";
   const usersCard = document.getElementById("usersCard");
+  const bonusCard = document.getElementById("bonusCard");
   if(role !== "owner"){
     usersCard.style.display = "none";
+    if(bonusCard) bonusCard.style.display = "none";
   } else {
     usersCard.style.display = "block";
+    if(bonusCard) bonusCard.style.display = "block";
   }
   const filters = document.querySelector(".filters");
   const actions = document.querySelector(".actions");
@@ -932,20 +1195,8 @@ document.getElementById("saveAdminPin").addEventListener("click", () => {
   alert("Admin PIN updated");
 });
 
-const staffToggle = document.getElementById("settingsStaffFilters");
-if(staffToggle){
-  staffToggle.checked = staffFiltersEnabled;
-  staffToggle.addEventListener("change", () => {
-    staffFiltersEnabled = staffToggle.checked;
-    localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, staffFiltersEnabled ? "true" : "false");
-    applyRole();
-  });
-}
-
 loadSettings();
-if(staffToggle){
-  staffToggle.checked = staffFiltersEnabled;
-}
+setupSettingsUI();
 if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
   applyRole();
 }

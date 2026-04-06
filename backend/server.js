@@ -49,11 +49,131 @@ const completedSessions = new Map();
 const appVersion = "2026-03-26-auth-auto-v2";
 const transactionsFile = path.join(__dirname, "data", "transactions.json");
 let memoryTransactions = null;
+const settingsFile = path.join(__dirname, "data", "settings.json");
+let memorySettings = null;
+
+const dashboardAdminPin = env("DASHBOARD_ADMIN_PIN", "");
+const requireDashboardPin = dashboardAdminPin && dashboardAdminPin.length >= 3;
+const defaultBaysEnv = env("LUXWASH_BAYS", "260529,260530,260531,260532,260533");
+const defaultBonusPacksEnv = env("BONUS_PACKS", "6:7,10:11,20:23");
 
 let tokenCache = { value: "", expiresAt: 0 };
 let autoAuthStrategyName = "";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function parseBays(value) {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value.split(",").map((v) => v.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function parseBonusPacks(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((pack) => ({
+        pay: Number(pack?.pay),
+        credit: Number(pack?.credit),
+      }))
+      .filter((pack) => Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.pay > 0 && pack.credit >= pack.pay);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .map((chunk) => {
+        const [payStr, creditStr] = chunk.split(":");
+        const pay = Number(payStr);
+        const credit = Number(creditStr);
+        return { pay, credit };
+      })
+      .filter((pack) => Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.pay > 0 && pack.credit >= pack.pay);
+  }
+  return [];
+}
+
+const defaultBays = parseBays(defaultBaysEnv);
+const defaultBonusPacks = parseBonusPacks(defaultBonusPacksEnv);
+
+function getDefaultSettings() {
+  return {
+    bonusEnabled: true,
+    bonusMode: "manual",
+    bonusPack: defaultBonusPacks[0]?.pay || 6,
+    bonusPacks: defaultBonusPacks.length ? defaultBonusPacks : [{ pay: 6, credit: 7 }, { pay: 10, credit: 11 }, { pay: 20, credit: 23 }],
+    bays: defaultBays.length ? defaultBays : [String(unipayDefaultBoxNum)],
+  };
+}
+
+async function readSettings() {
+  if (memorySettings) {
+    return memorySettings;
+  }
+  try {
+    const raw = await fs.readFile(settingsFile, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      return { ...getDefaultSettings(), ...parsed };
+    }
+    return getDefaultSettings();
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return getDefaultSettings();
+    }
+    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+      memorySettings = memorySettings || getDefaultSettings();
+      return memorySettings;
+    }
+    throw error;
+  }
+}
+
+async function writeSettings(settings) {
+  try {
+    await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
+    memorySettings = null;
+  } catch (error) {
+    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+      memorySettings = settings;
+      return;
+    }
+    throw error;
+  }
+}
+
+function sanitizeSettings(payload, current) {
+  const next = { ...current };
+  if (typeof payload?.bonusEnabled === "boolean") {
+    next.bonusEnabled = payload.bonusEnabled;
+  }
+  if (payload?.bonusMode === "manual" || payload?.bonusMode === "recommended") {
+    next.bonusMode = payload.bonusMode;
+  }
+  if (payload?.bonusPack !== undefined && Number.isFinite(Number(payload.bonusPack))) {
+    next.bonusPack = Number(payload.bonusPack);
+  }
+  if (payload?.bonusPacks !== undefined) {
+    const parsed = parseBonusPacks(payload.bonusPacks);
+    if (parsed.length) {
+      next.bonusPacks = parsed;
+      if (!parsed.find((pack) => pack.pay === next.bonusPack)) {
+        next.bonusPack = parsed[0].pay;
+      }
+    }
+  }
+  if (payload?.bays !== undefined) {
+    const parsed = parseBays(payload.bays);
+    if (parsed.length) {
+      next.bays = parsed;
+    }
+  }
+  return next;
+}
 
 async function readTransactions() {
   if (Array.isArray(memoryTransactions)) {
@@ -686,6 +806,32 @@ app.get("/api/health", async (_req, res) => {
     unipaySendClientHeaders,
     defaultBox: unipayDefaultBoxNum,
   });
+});
+
+app.get("/api/settings", async (_req, res) => {
+  try {
+    const settings = await readSettings();
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Unable to load settings" });
+  }
+});
+
+app.post("/api/settings", async (req, res) => {
+  try {
+    if (requireDashboardPin) {
+      const provided = String(req.body?.pin || "");
+      if (provided !== String(dashboardAdminPin)) {
+        return res.status(403).json({ error: "Invalid admin PIN" });
+      }
+    }
+    const current = await readSettings();
+    const next = sanitizeSettings(req.body || {}, current);
+    await writeSettings(next);
+    res.json(next);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Unable to save settings" });
+  }
 });
 
 app.post("/api/topup/create-session", async (req, res) => {
