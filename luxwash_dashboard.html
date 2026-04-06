@@ -1238,6 +1238,7 @@ function applyRole(){
 if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
   document.getElementById("loginScreen").style.display = "none";
   applyRole();
+  startDashboard();
 }
 
 document.getElementById("pinBtn").addEventListener("click", unlockIfPinMatches);

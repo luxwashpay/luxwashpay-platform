@@ -31,8 +31,8 @@ const stripeSecretKey = env("STRIPE_SECRET_KEY");
 const stripeCurrency = env("STRIPE_CURRENCY", "gbp");
 const stripeConnectAccountId = env("STRIPE_CONNECT_ACCOUNT_ID");
 const platformFeePence = Number(env("PLATFORM_FEE_PENCE", "50"));
-const publicAppUrl = env("PUBLIC_APP_URL", "http://127.0.0.1:5500").replace(/\/+$/, "");
-const publicTopupPath = env("PUBLIC_TOPUP_PATH", "/luxwash_v11_booking_fee.html");
+const publicAppUrl = env("PUBLIC_APP_URL", "").replace(/\/+$/, "");
+const publicTopupPath = env("PUBLIC_TOPUP_PATH", "/");
 
 const rawUnipayBaseUrl = env("UNIPAY_BASE_URL", "").trim();
 const unipayBaseUrl = rawUnipayBaseUrl ? rawUnipayBaseUrl.replace(/\/+$/, "") + "/" : "";
@@ -57,6 +57,10 @@ const transactionsFile = path.join(__dirname, "data", "transactions.json");
 let memoryTransactions = null;
 const settingsFile = path.join(__dirname, "data", "settings.json");
 let memorySettings = null;
+const settingsStore = env("SETTINGS_STORE", process.env.VERCEL && stripeSecretKey ? "stripe" : "file").toLowerCase();
+let stripeAccountCache = null;
+let stripeAccountCacheAt = 0;
+const STRIPE_SETTINGS_CACHE_MS = 5 * 60 * 1000;
 
 const dashboardAdminPin = env("DASHBOARD_ADMIN_PIN", "");
 const requireDashboardPin = dashboardAdminPin && dashboardAdminPin.length >= 3;
@@ -116,9 +120,68 @@ function getDefaultSettings() {
   };
 }
 
+function parseSettingsFromMetadata(meta) {
+  if (!meta || typeof meta !== "object") {
+    return null;
+  }
+  const next = {};
+  if (meta.luxwash_bonus_enabled !== undefined) {
+    next.bonusEnabled = String(meta.luxwash_bonus_enabled) === "1";
+  }
+  if (meta.luxwash_bonus_mode === "manual" || meta.luxwash_bonus_mode === "recommended") {
+    next.bonusMode = meta.luxwash_bonus_mode;
+  }
+  if (meta.luxwash_bonus_pack && Number.isFinite(Number(meta.luxwash_bonus_pack))) {
+    next.bonusPack = Number(meta.luxwash_bonus_pack);
+  }
+  if (meta.luxwash_bonus_packs) {
+    try {
+      const parsed = JSON.parse(meta.luxwash_bonus_packs);
+      const packs = parseBonusPacks(parsed);
+      if (packs.length) {
+        next.bonusPacks = packs;
+      }
+    } catch (_) {}
+  }
+  if (meta.luxwash_bays) {
+    const bays = parseBays(meta.luxwash_bays);
+    if (bays.length) {
+      next.bays = bays;
+    }
+  }
+  return next;
+}
+
+async function getStripeAccount() {
+  if (!stripe) {
+    return null;
+  }
+  const now = Date.now();
+  if (stripeAccountCache && now - stripeAccountCacheAt < STRIPE_SETTINGS_CACHE_MS) {
+    return stripeAccountCache;
+  }
+  const account = await stripe.accounts.retrieve();
+  stripeAccountCache = account;
+  stripeAccountCacheAt = now;
+  return account;
+}
+
 async function readSettings() {
   if (memorySettings) {
     return memorySettings;
+  }
+  if (settingsStore === "stripe" && stripe) {
+    try {
+      const account = await getStripeAccount();
+      const metaSettings = parseSettingsFromMetadata(account?.metadata);
+      if (metaSettings) {
+        const merged = { ...getDefaultSettings(), ...metaSettings };
+        memorySettings = merged;
+        return merged;
+      }
+    } catch (_) {
+      // fall through to file
+    }
   }
   try {
     const raw = await fs.readFile(settingsFile, "utf8");
@@ -140,6 +203,21 @@ async function readSettings() {
 }
 
 async function writeSettings(settings) {
+  if (settingsStore === "stripe" && stripe) {
+    const metadata = {
+      luxwash_bonus_enabled: settings.bonusEnabled ? "1" : "0",
+      luxwash_bonus_mode: settings.bonusMode || "manual",
+      luxwash_bonus_pack: String(settings.bonusPack || ""),
+      luxwash_bonus_packs: JSON.stringify(settings.bonusPacks || []),
+      luxwash_bays: Array.isArray(settings.bays) ? settings.bays.join(",") : "",
+    };
+    const account = await getStripeAccount();
+    if (account?.id) {
+      await stripe.accounts.update(account.id, { metadata });
+      memorySettings = settings;
+      return;
+    }
+  }
   try {
     await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
     memorySettings = null;
@@ -315,6 +393,27 @@ function formatBayLabel(boxNum, bays) {
     return `Bay ${idx + 1}`;
   }
   return `Bay ${boxNum}`;
+}
+
+function resolvePublicBaseUrl(req) {
+  if (publicAppUrl) {
+    return publicAppUrl;
+  }
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "").split(",")[0].trim();
+  const host = forwardedHost || String(req.headers.host || "").trim();
+  const proto = forwardedProto || (host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https");
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return "http://127.0.0.1:5500";
+}
+
+function resolveTopupPath() {
+  if (!publicTopupPath) {
+    return "/";
+  }
+  return publicTopupPath.startsWith("/") ? publicTopupPath : `/${publicTopupPath}`;
 }
 
 function joinUnipayPath(path) {
@@ -869,8 +968,10 @@ app.post("/api/topup/create-session", async (req, res) => {
     const settings = await readSettings();
     const bayLabel = formatBayLabel(boxNum, settings?.bays || defaultBays);
 
-    const successUrl = `${publicAppUrl}${publicTopupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${publicAppUrl}${publicTopupPath}?payment=cancelled`;
+    const baseUrl = resolvePublicBaseUrl(req);
+    const topupPath = resolveTopupPath();
+    const successUrl = `${baseUrl}${topupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}${topupPath}?payment=cancelled`;
 
     const paymentIntentData = {
       metadata: {
