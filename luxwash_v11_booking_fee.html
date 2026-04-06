@@ -1095,7 +1095,23 @@
       handleReturnFromStripe();
     }
 
+    async function refreshSettings() {
+      try {
+        await resolveApiBase();
+        await loadSettings();
+        renderBonusPacks();
+        renderBayOptions();
+        ui();
+      } catch (e) {}
+    }
+
     initPage();
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        refreshSettings();
+      }
+    });
+    setInterval(refreshSettings, 60000);
   </script>
 </body>
 </html>

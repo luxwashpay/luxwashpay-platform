@@ -13,6 +13,12 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  if (req.path && req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
 
 const env = (name, fallback = "") => {
   const value = process.env[name];
