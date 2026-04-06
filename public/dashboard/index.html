@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>LuxWash — Operations Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#070709;
+  --surface:#0f0f14;
+  --card:#14141b;
+  --border:rgba(255,255,255,0.08);
+  --border-strong:rgba(255,255,255,0.15);
+  --red:#ce1126;
+  --green:#0fbf75;
+  --gold:#f6c343;
+  --muted:rgba(240,240,248,0.6);
+  --muted-2:rgba(240,240,248,0.35);
+  --white:#f7f7ff;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);min-height:100vh}
+
+@media print {
+  body { background:#fff; color:#111; }
+  .topbar, #loginScreen, .filters, .actions, .logout { display:none !important; }
+  .card, .kpi { border:1px solid #ddd; box-shadow:none; }
+  .page { padding:12px; }
+  .bar { background:#999 !important; }
+}
+
+#loginScreen{position:fixed;inset:0;background:radial-gradient(circle at top,rgba(206,17,38,0.14),transparent 45%),var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:999}
+.login-box{background:var(--card);border:1px solid var(--border);padding:28px;width:330px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,0.45)}
+.login-title{font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:700;margin-bottom:6px}
+.login-sub{font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+.login-input{width:100%;padding:12px 14px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--white);font-size:1rem;text-align:center;letter-spacing:0.35em}
+.login-btn{margin-top:12px;width:100%;padding:12px;border:none;background:var(--red);color:white;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+.login-err{margin-top:10px;font-size:0.7rem;color:#ff7d7d;display:none}
+
+.topbar{position:sticky;top:0;z-index:10;background:rgba(7,7,9,0.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:16px 28px}
+.logo{display:flex;align-items:center;gap:12px;font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:700;letter-spacing:-0.02em}
+.logo-img{width:34px;height:34px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.logo-mark{display:flex;flex-direction:row;gap:4px}
+.logo-line{width:10px;height:24px;border-radius:2px}
+.logo-text span{color:var(--red)}
+.top-actions{display:flex;align-items:center;gap:12px}
+.api-pill{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+.api-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);box-shadow:0 0 8px rgba(255,255,255,0.15)}
+.api-pill.online .api-dot{background:var(--green);box-shadow:0 0 10px rgba(15,191,117,0.8)}
+.api-pill.offline .api-dot{background:#ff4d6d;box-shadow:0 0 10px rgba(255,77,109,0.8)}
+.translate-wrap{display:flex;align-items:center;gap:8px}
+.translate-label{font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
+.goog-te-gadget{color:var(--muted) !important}
+.goog-te-gadget select{background:rgba(255,255,255,0.06);color:var(--white);border:1px solid var(--border);padding:6px 10px;font-size:0.7rem}
+.badge{font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);padding:6px 12px}
+.logout{border:1px solid var(--border);background:transparent;color:var(--muted);padding:6px 12px;font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+
+.page{max-width:1150px;margin:0 auto;padding:28px}
+.page-title{font-family:'Space Grotesk',sans-serif;font-size:1.65rem;font-weight:700;margin-bottom:6px}
+.page-sub{color:var(--muted);font-size:0.9rem;margin-bottom:24px}
+.dash-error{margin-bottom:18px;padding:12px 14px;border:1px solid rgba(255,77,109,0.4);background:rgba(255,77,109,0.12);color:#ff9fb1;font-size:0.85rem;display:none}
+.dash-error button{margin-left:12px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 10px;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer}
+
+.filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;align-items:flex-end}
+.filter-group{display:flex;flex-direction:column;gap:6px}
+.filter-label{font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+.filter-input, .filter-select{padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--white);font-size:0.85rem}
+.filter-btn{background:var(--red);color:white;border:none;padding:11px 16px;font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;cursor:pointer}
+.filter-clear{background:transparent;color:var(--muted);border:1px solid var(--border);padding:11px 14px;font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;cursor:pointer}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.kpi{background:var(--card);border:1px solid var(--border);padding:20px;position:relative}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)}
+.kpi.green::before{background:var(--green)}
+.kpi.gold::before{background:var(--gold)}
+.kpi-label{font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.kpi-value{font-family:'Space Grotesk',sans-serif;font-size:1.9rem;font-weight:700}
+.kpi-sub{font-size:0.75rem;color:var(--muted-2)}
+
+  .grid{display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-bottom:26px}
+  .span-2{grid-column:1 / -1}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);padding:20px}
+.card-title{font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.card-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.chart-wrap{display:flex;gap:8px;align-items:flex-end;height:140px}
+.bar{flex:1;background:linear-gradient(180deg,rgba(206,17,38,0.9),rgba(206,17,38,0.2));border-radius:6px 6px 0 0;min-height:8px;transition:transform 0.2s}
+.bar:hover{transform:scaleY(1.05)}
+.bar-labels{display:flex;gap:8px;margin-top:8px}
+.bar-label{flex:1;text-align:center;font-size:0.6rem;color:var(--muted-2)}
+
+.mini-chart{display:flex;gap:6px;align-items:flex-end;height:120px}
+.mini-bar{flex:1;background:linear-gradient(180deg,rgba(15,191,117,0.85),rgba(15,191,117,0.15));border-radius:6px 6px 0 0;min-height:6px}
+.forecast-list{display:grid;gap:10px}
+.forecast-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);background:rgba(255,255,255,0.02);font-size:0.82rem}
+.forecast-item span{color:var(--muted)}
+.disclaimer{margin-top:10px;font-size:0.7rem;color:var(--muted-2)}
+
+.heatmap{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.heat-cell{height:40px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:0.6rem;color:var(--muted-2)}
+.heat-cell strong{font-size:0.7rem;color:var(--white)}
+
+.bay-list{display:grid;gap:10px}
+.bay-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
+.bay-name{font-size:0.8rem;color:var(--muted)}
+.bay-value{font-family:'Space Grotesk',sans-serif;font-weight:600}
+
+.table{width:100%;border-collapse:collapse}
+.table th{font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px;border-bottom:1px solid var(--border)}
+.table td{padding:12px 10px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.82rem}
+.table tr:last-child td{border-bottom:none}
+
+.status{padding:4px 10px;border-radius:999px;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.08em;background:rgba(15,191,117,0.15);color:var(--green)}
+.status.fail{background:rgba(255,77,109,0.15);color:#ff7d7d}
+
+.alerts{display:grid;gap:10px}
+.alert{padding:10px 12px;border:1px solid rgba(255,77,109,0.3);background:rgba(255,77,109,0.08)}
+.alert strong{display:block;font-size:0.8rem;margin-bottom:4px}
+.alert small{color:var(--muted-2)}
+
+.status-strip{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.status-chip{flex:1;min-width:160px;padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:linear-gradient(140deg,rgba(255,255,255,0.04),rgba(255,255,255,0));position:relative;overflow:hidden}
+.status-chip::after{content:"";position:absolute;inset:-60% 20% auto -40%;height:120%;background:radial-gradient(circle,rgba(255,255,255,0.15),transparent 70%);opacity:0.3;transform:translateX(-60%)}
+.status-chip.ok{box-shadow:0 0 20px rgba(15,191,117,0.2)}
+.status-chip.warn{box-shadow:0 0 20px rgba(246,195,67,0.2)}
+.status-chip.bad{box-shadow:0 0 22px rgba(255,77,109,0.25)}
+.status-chip.ok .chip-dot{background:var(--green);box-shadow:0 0 12px rgba(15,191,117,0.8)}
+.status-chip.warn .chip-dot{background:var(--gold);box-shadow:0 0 12px rgba(246,195,67,0.8)}
+.status-chip.bad .chip-dot{background:#ff4d6d;box-shadow:0 0 14px rgba(255,77,109,0.85)}
+.chip-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.chip-title{font-family:'Space Grotesk',sans-serif;font-size:0.95rem}
+.chip-dot{width:8px;height:8px;border-radius:50%}
+.chip-status{font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+.chip-sub{font-size:0.72rem;color:var(--muted-2)}
+
+.actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:10px}
+.csv-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+.print-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+
+.users-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.users-grid{grid-template-columns:1fr}}
+.user-list{display:grid;gap:10px}
+.user-card{padding:10px 12px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.user-card span{font-size:0.8rem}
+.bonus-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.bonus-grid{grid-template-columns:1fr}}
+.toggle-row{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem}
+.bonus-pack-row{display:flex;gap:8px;flex-wrap:wrap}
+.bonus-pack-btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--muted);font-size:0.75rem;cursor:pointer}
+.bonus-pack-btn.active{border-color:var(--green);color:var(--green)}
+.bonus-rec{font-size:0.9rem;color:var(--white);font-weight:600}
+.bonus-insight{padding:12px;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.85rem;color:var(--muted)}
+.user-btn{border:1px solid var(--border);background:transparent;color:var(--muted);padding:6px 10px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+
+.footer{margin-top:26px;color:var(--muted-2);font-size:0.7rem;text-align:center}
+</style>
+</head>
+<body>
+  <div id="loginScreen">
+    <div class="login-box">
+      <div class="login-title">LuxWash Ops</div>
+      <div class="login-sub">Enter PIN</div>
+      <input class="login-input" id="pinInput" type="password" maxlength="6" placeholder="••••" />
+      <button class="login-btn" id="pinBtn">Unlock</button>
+      <div class="login-err" id="pinErr">Incorrect PIN</div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="logo">
+      <img class="logo-img" id="logoImg" alt="LuxWash logo" />
+      <div class="logo-text">Lux<span>Wash</span> Ops</div>
+    </div>
+  <div class="top-actions">
+    <div class="api-pill" id="apiStatus"><span class="api-dot"></span><span id="apiStatusText">API</span></div>
+    <div class="translate-wrap">
+      <div class="translate-label">Translate</div>
+      <div id="google_translate_element"></div>
+    </div>
+      <div class="badge">Live Dashboard</div>
+      <button class="logout" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="page-title">QR Payments Overview</div>
+    <div class="page-sub">Real-time view of top-ups, bay performance, and automated machine starts.</div>
+    <div class="dash-error" id="dashError">Dashboard offline. Please refresh.</div>
+
+    <div class="status-strip" id="status-strip"></div>
+
+    <div class="filters">
+      <div class="filter-group">
+        <div class="filter-label">Bay</div>
+        <select class="filter-select" id="filterBay">
+          <option value="">All Bays</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Start Date</div>
+        <input type="date" class="filter-input" id="filterStart" />
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">End Date</div>
+        <input type="date" class="filter-input" id="filterEnd" />
+      </div>
+      <button class="filter-btn" id="applyFilters">Apply Filters</button>
+      <button class="filter-clear" id="clearFilters">Clear</button>
+      <button class="filter-btn" id="printDaily">Print Daily Report</button>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi green">
+        <div class="kpi-label">Today</div>
+        <div class="kpi-value" id="kpi-today">£0.00</div>
+        <div class="kpi-sub" id="kpi-today-count">0 transactions</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">This Week</div>
+        <div class="kpi-value" id="kpi-week">£0.00</div>
+        <div class="kpi-sub" id="kpi-week-count">0 transactions</div>
+      </div>
+      <div class="kpi gold">
+        <div class="kpi-label">This Month</div>
+        <div class="kpi-value" id="kpi-month">£0.00</div>
+        <div class="kpi-sub" id="kpi-month-count">0 transactions</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">All Time</div>
+        <div class="kpi-value" id="kpi-all">£0.00</div>
+        <div class="kpi-sub" id="kpi-all-count">0 transactions</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">Last 7 Days</div>
+        <div class="chart-wrap" id="chart-bars"></div>
+        <div class="bar-labels" id="chart-labels"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Bay Totals</div>
+        <div class="bay-list" id="bay-list"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card span-2">
+        <div class="card-title">Bay Performance (Totals)</div>
+        <div class="chart-wrap" id="bay-bars"></div>
+        <div class="bar-labels" id="bay-labels"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">Revenue Forecast (Next 7 Days)</div>
+        <div class="forecast-list" id="forecast-list"></div>
+        <div class="disclaimer">Not guaranteed — good to check.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top-up Demand</div>
+        <div class="mini-chart" id="hour-bars"></div>
+        <div class="bar-labels" id="hour-labels"></div>
+        <div class="disclaimer">Not guaranteed — based on recent top-ups.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Peak Hours Heatmap</div>
+      <div class="heatmap" id="heatmap"></div>
+      <div class="disclaimer">Not guaranteed — shows busiest hours based on recent top-ups.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Alerts</div>
+      <div class="alerts" id="alerts-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recent Transactions</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Bay</th>
+            <th>Amount</th>
+            <th>Pay ID</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tx-body"></tbody>
+      </table>
+      <div class="actions">
+        <span class="muted">Export current view</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="csv-btn" id="csvBtn">Export CSV</button>
+          <button class="print-btn" id="printBtn">Print</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="bonusCard" style="margin-top:18px">
+      <div class="card-title">Bonus Pack Recommendations</div>
+      <div class="bonus-grid">
+        <div>
+          <div class="filter-label">Status</div>
+          <label class="toggle-row">
+            <input type="checkbox" id="bonusEnabledToggle" />
+            Enable bonus packs on live page
+          </label>
+          <div class="filter-label" style="margin-top:12px">Mode</div>
+          <select class="filter-select" id="bonusModeSelect">
+            <option value="manual">Manual</option>
+            <option value="recommended">Recommended</option>
+          </select>
+          <div class="filter-label" style="margin-top:12px">Manual Pack</div>
+          <div class="bonus-pack-row" id="bonusPackRow"></div>
+          <div class="filter-label" style="margin-top:12px">Recommended Pack</div>
+          <div class="bonus-rec" id="bonusRecText">Calculating...</div>
+          <button class="filter-btn" id="applyBonusRec" style="margin-top:10px">Apply Recommendation</button>
+          <button class="filter-btn" id="saveBonusSettings" style="margin-top:10px">Save to Live Page</button>
+          <div class="disclaimer">Not guaranteed — recommendation based on recent top-ups.</div>
+        </div>
+        <div>
+          <div class="filter-label">Bay List (comma separated)</div>
+          <input class="filter-input" id="bonusBaysInput" placeholder="260529,260530,260531" />
+          <div class="filter-label" style="margin-top:12px">Demand Insight</div>
+          <div class="bonus-insight" id="bonusInsight">Loading...</div>
+          <div class="disclaimer" id="bonusInsightNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="usersCard" style="margin-top:18px">
+      <div class="card-title">Users & PIN Settings</div>
+      <div class="users-grid">
+        <div>
+          <div class="user-list" id="userList"></div>
+        </div>
+        <div>
+          <div class="filter-label">Add User</div>
+          <input class="filter-input" id="newUserName" placeholder="User name" />
+          <input class="filter-input" id="newUserPin" placeholder="PIN (4-6 digits)" style="margin-top:8px" />
+          <select class="filter-select" id="newUserRole" style="margin-top:8px">
+            <option value="staff">Staff</option>
+            <option value="owner">Owner</option>
+          </select>
+          <button class="filter-btn" id="addUserBtn" style="margin-top:10px">Add User</button>
+          <div class="filter-label" style="margin-top:18px">Admin PIN</div>
+          <input class="filter-input" id="adminPinInput" placeholder="New admin PIN" />
+          <button class="filter-btn" id="saveAdminPin" style="margin-top:10px">Save Admin PIN</button>
+          <div class="filter-label" style="margin-top:18px">Staff Access</div>
+          <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem">
+            <input type="checkbox" id="settingsStaffFilters" />
+            Allow staff to see filters + reports
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer"></div>
+  </div>
+
+<script>
+  window.LUXWASH_BAYS = ["260529","260530","260531","260532","260533"];
+  window.LUXWASH_BAY_ALERT_MINUTES = 60;
+</script>
+<script>
+function normalizeBays(value){
+  if(Array.isArray(value)){
+    return value.map(String).filter(Boolean);
+  }
+  if(typeof value === "string"){
+    return value.split(",").map(v => v.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+const origin = window.location && window.location.origin && window.location.origin !== "null"
+  ? window.location.origin
+  : "";
+const apexOrigin = origin && origin.indexOf("://www.") !== -1
+  ? origin.replace("://www.", "://")
+  : "";
+let API_BASE_URL = window.LUXWASH_API_BASE_URL || "";
+let apiReadyPromise = null;
+const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
+const LOGO_URL = window.LUXWASH_LOGO_URL || "";
+const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
+const DEFAULT_BAYS = ["260529", "260530", "260531", "260532", "260533"];
+const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
+const DEFAULT_BONUS_PACKS = [
+  { pay: 6, credit: 7 },
+  { pay: 10, credit: 11 },
+  { pay: 20, credit: 23 }
+];
+let dashboardBays = DEFAULT_BAYS.slice();
+let bayAlertMinutes = DEFAULT_MINUTES;
+let staffFiltersEnabled = true;
+let bonusEnabled = true;
+let bonusMode = "manual";
+let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
+let bonusPacks = DEFAULT_BONUS_PACKS.slice();
+let latestRecommendation = null;
+let dashboardInterval = null;
+let settingsDirty = false;
+
+const storageKey = "luxwash_dashboard_users";
+const adminKey = "luxwash_dashboard_admin";
+
+function getUsers(){
+  const raw = localStorage.getItem(storageKey);
+  if(!raw){
+    const seed = [{name:"Owner", pin:DEFAULT_ADMIN_PIN, role:"owner"}];
+    localStorage.setItem(storageKey, JSON.stringify(seed));
+    return seed;
+  }
+  try{
+    return JSON.parse(raw);
+  }catch(e){
+    return [];
+  }
+}
+
+function setUsers(users){
+  localStorage.setItem(storageKey, JSON.stringify(users));
+}
+
+function getAdminPin(){
+  return localStorage.getItem(adminKey) || DEFAULT_ADMIN_PIN;
+}
+
+function setAdminPin(pin){
+  localStorage.setItem(adminKey, pin);
+}
+
+function formatMoney(value){
+  return "£" + Number(value || 0).toFixed(2);
+}
+
+function formatDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleString();
+}
+
+function bayLabel(value){
+  if(!value){
+    return "Bay";
+  }
+  const idx = dashboardBays.findIndex(bay => String(bay) === String(value));
+  if(idx >= 0){
+    return `Bay ${idx + 1}`;
+  }
+  return `Bay ${value}`;
+}
+
+function loadSettings(){
+  const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
+  staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
+}
+
+function applyRemoteSettings(settings){
+  if(!settings || typeof settings !== "object"){
+    return;
+  }
+  if(typeof settings.bonusEnabled === "boolean"){
+    bonusEnabled = settings.bonusEnabled;
+  }
+  if(settings.bonusMode === "manual" || settings.bonusMode === "recommended"){
+    bonusMode = settings.bonusMode;
+  }
+  if(Array.isArray(settings.bonusPacks) && settings.bonusPacks.length){
+    bonusPacks = settings.bonusPacks.map(pack => ({
+      pay: Number(pack.pay),
+      credit: Number(pack.credit)
+    })).filter(pack => Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay);
+  }
+  if(Number.isFinite(Number(settings.bonusPack))){
+    bonusPack = Number(settings.bonusPack);
+  }
+  if(Array.isArray(settings.bays) && settings.bays.length){
+    dashboardBays = settings.bays.map(String);
+  }
+  settingsDirty = false;
+}
+
+async function loadRemoteSettings(){
+  try{
+    await resolveApiBase();
+    const settings = await fetchJson(API_BASE_URL + "/api/settings");
+    applyRemoteSettings(settings);
+  }catch(e){
+    // ignore
+  }
+}
+
+function timeAgo(ts){
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if(mins < 1) return "just now";
+  if(mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if(hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+async function fetchJson(url){
+  const res = await fetch(url);
+  if(!res.ok){
+    throw new Error("Dashboard API error");
+  }
+  return await res.json();
+}
+
+async function resolveApiBase(){
+  if(apiReadyPromise){
+    return apiReadyPromise;
+  }
+  apiReadyPromise = (async () => {
+    const candidates = [];
+    // Prefer same-origin relative API to avoid CORS/redirect issues.
+    try{
+      const res = await fetch("/api/health", { cache: "no-store" });
+      if(res.ok){
+        API_BASE_URL = "";
+        return API_BASE_URL;
+      }
+    }catch(e){}
+    if(origin){
+      candidates.push(origin);
+    }
+    if(apexOrigin && apexOrigin !== origin){
+      candidates.push(apexOrigin);
+    }
+    if(origin && origin.indexOf("://www.") === -1 && origin.indexOf("://") !== -1){
+      candidates.push(origin.replace("://", "://www."));
+    }
+    if(window.LUXWASH_API_BASE_URL){
+      candidates.push(window.LUXWASH_API_BASE_URL);
+    }
+    if(window.LUXWASH_API_FALLBACKS){
+      if(Array.isArray(window.LUXWASH_API_FALLBACKS)){
+        candidates = candidates.concat(window.LUXWASH_API_FALLBACKS);
+      } else if(typeof window.LUXWASH_API_FALLBACKS === "string"){
+        candidates = candidates.concat(window.LUXWASH_API_FALLBACKS.split(",").map(entry => entry.trim()));
+      }
+    }
+    candidates.push("https://luxwashpay.com");
+    candidates.push("https://www.luxwashpay.com");
+    const unique = Array.from(new Set(candidates.filter(Boolean)));
+    for(const base of unique){
+      try{
+        const res = await fetch(base.replace(/\/+$/, "") + "/api/health", { cache: "no-store" });
+        if(res.ok){
+          API_BASE_URL = base.replace(/\/+$/, "");
+          return API_BASE_URL;
+        }
+      } catch (e) {
+        // ignore and try next
+      }
+    }
+    return API_BASE_URL;
+  })();
+  return apiReadyPromise;
+}
+
+function renderKpis(summary){
+  document.getElementById("kpi-today").textContent = formatMoney(summary.totals.today);
+  document.getElementById("kpi-week").textContent = formatMoney(summary.totals.week);
+  document.getElementById("kpi-month").textContent = formatMoney(summary.totals.month);
+  document.getElementById("kpi-all").textContent = formatMoney(summary.totals.all);
+  document.getElementById("kpi-today-count").textContent = summary.counts.today + " transactions";
+  document.getElementById("kpi-week-count").textContent = summary.counts.week + " transactions";
+  document.getElementById("kpi-month-count").textContent = summary.counts.month + " transactions";
+  document.getElementById("kpi-all-count").textContent = summary.counts.all + " transactions";
+}
+
+async function updateApiStatus(){
+  const pill = document.getElementById("apiStatus");
+  const label = document.getElementById("apiStatusText");
+  if(!pill || !label){
+    return;
+  }
+  label.textContent = "API";
+  pill.classList.remove("online", "offline");
+  try{
+    await resolveApiBase();
+    const res = await fetch(API_BASE_URL + "/api/health", { cache: "no-store" });
+    if(res.ok){
+      pill.classList.add("online");
+      label.textContent = "API Online";
+      return;
+    }
+  }catch(e){}
+  pill.classList.add("offline");
+  label.textContent = "API Offline";
+}
+
+function median(values){
+  if(!values.length) return 0;
+  const sorted = values.slice().sort((a,b)=>a-b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function recommendBonusPack(transactions){
+  const now = Date.now();
+  const last30 = transactions.filter(tx => {
+    if(!tx || !tx.createdAt) return false;
+    const ts = new Date(tx.createdAt).getTime();
+    return ts >= now - 30 * 24 * 60 * 60 * 1000;
+  }).filter(tx => tx.status !== "failed");
+  const amounts = last30.map(tx => Number(tx.amount || 0)).filter(v => Number.isFinite(v) && v > 0);
+  const medianAmount = median(amounts);
+  let recommended = bonusPacks[0];
+  if(medianAmount){
+    recommended = bonusPacks.reduce((best, pack) => {
+      const currentDiff = Math.abs(pack.pay - medianAmount);
+      const bestDiff = Math.abs(best.pay - medianAmount);
+      return currentDiff < bestDiff ? pack : best;
+    }, bonusPacks[0]);
+  }
+
+  const dailyTotals = {};
+  last30.forEach(tx => {
+    const dayKey = toDateKey(tx.createdAt);
+    dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + Number(tx.amount || 0);
+  });
+  const totals = Object.values(dailyTotals);
+  const avgDay = totals.length ? totals.reduce((a,b)=>a+b,0) / totals.length : 0;
+  const todayKey = toDateKey(new Date());
+  const todayTotal = dailyTotals[todayKey] || 0;
+  const slowDay = avgDay > 0 && todayTotal < avgDay * 0.85;
+
+  return {
+    pack: recommended,
+    medianAmount,
+    avgDay,
+    todayTotal,
+    slowDay
+  };
+}
+
+function renderBonusPackButtons(){
+  const row = document.getElementById("bonusPackRow");
+  if(!row) return;
+  row.innerHTML = "";
+  bonusPacks.forEach(pack => {
+    const btn = document.createElement("button");
+    btn.className = "bonus-pack-btn" + (Number(pack.pay) === Number(bonusPack) ? " active" : "");
+    btn.textContent = `£${pack.pay} → £${pack.credit.toFixed(2)}`;
+    btn.onclick = () => {
+      bonusPack = pack.pay;
+      renderBonusPackButtons();
+    };
+    row.appendChild(btn);
+  });
+}
+
+function updateBonusControls(){
+  const toggle = document.getElementById("bonusEnabledToggle");
+  const modeSelect = document.getElementById("bonusModeSelect");
+  if(toggle) toggle.checked = bonusEnabled;
+  if(modeSelect) modeSelect.value = bonusMode;
+  const bayInput = document.getElementById("bonusBaysInput");
+  if(bayInput) bayInput.value = dashboardBays.join(",");
+  renderBonusPackButtons();
+  renderBonusRecommendation(null);
+}
+
+function markSettingsDirty(){
+  settingsDirty = true;
+}
+
+function renderBonusRecommendation(reco){
+  const recEl = document.getElementById("bonusRecText");
+  const insight = document.getElementById("bonusInsight");
+  const note = document.getElementById("bonusInsightNote");
+  if(!reco){
+    if(recEl) recEl.textContent = "Not enough data yet.";
+    if(insight) insight.textContent = "No data available yet.";
+    if(note) note.textContent = "";
+    return;
+  }
+  if(recEl){
+    recEl.textContent = `Recommended: £${reco.pack.pay} → £${reco.pack.credit.toFixed(2)} (median top-up £${reco.medianAmount.toFixed(2)})`;
+  }
+  if(insight){
+    if(reco.slowDay){
+      insight.textContent = "Slow day detected. Bonus packs can help lift demand.";
+    } else {
+      insight.textContent = "Demand looks normal. Bonus packs can still increase average spend.";
+    }
+  }
+  if(note){
+    note.textContent = reco.avgDay ? `Avg/day £${reco.avgDay.toFixed(2)} • Today £${reco.todayTotal.toFixed(2)}` : "Waiting for more data.";
+  }
+}
+
+async function saveBonusSettings(){
+  try{
+    await resolveApiBase();
+    const bayInput = document.getElementById("bonusBaysInput");
+    if(bayInput){
+      const list = bayInput.value.split(",").map(v => v.trim()).filter(Boolean);
+      if(list.length){
+        dashboardBays = list;
+      }
+    }
+    const payload = {
+      bonusEnabled,
+      bonusMode,
+      bonusPack,
+      bonusPacks,
+      bays: dashboardBays,
+      pin: getAdminPin()
+    };
+    const res = await fetchJson(API_BASE_URL + "/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    applyRemoteSettings(res);
+    updateBonusControls();
+    alert("Bonus settings saved to live page");
+  }catch(e){
+    alert("Unable to save bonus settings: " + e.message);
+  }
+}
+
+function renderChart(last7){
+  const max = Math.max(...last7.map(d => d.total), 1);
+  const bars = document.getElementById("chart-bars");
+  const labels = document.getElementById("chart-labels");
+  bars.innerHTML = ""; labels.innerHTML = "";
+  last7.forEach(day => {
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.height = (day.total / max * 120 + 8) + "px";
+    bar.title = day.date + " • " + formatMoney(day.total);
+    bars.appendChild(bar);
+
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = day.date.slice(5);
+    labels.appendChild(label);
+  });
+}
+
+function renderBays(byBay){
+  const list = document.getElementById("bay-list");
+  list.innerHTML = "";
+  const keys = Object.keys(byBay);
+  if(keys.length === 0){
+    list.innerHTML = '<div class="muted">No bay data yet</div>';
+    return;
+  }
+  keys.sort((a,b)=>Number(a)-Number(b)).forEach(key => {
+    const item = document.createElement("div");
+    item.className = "bay-item";
+    item.innerHTML = `<div class="bay-name">${bayLabel(key)}</div><div class="bay-value">${formatMoney(byBay[key])}</div>`;
+    list.appendChild(item);
+  });
+}
+
+function renderBayChart(byBay){
+  const keys = Object.keys(byBay);
+  const bars = document.getElementById("bay-bars");
+  const labels = document.getElementById("bay-labels");
+  bars.innerHTML = ""; labels.innerHTML = "";
+  if(!keys.length){
+    bars.innerHTML = '<div class="muted">No bay data</div>';
+    return;
+  }
+  const values = keys.map(k => Number(byBay[k] || 0));
+  const max = Math.max(...values, 1);
+  keys.sort((a,b)=>Number(a)-Number(b)).forEach(key => {
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.height = (Number(byBay[key] || 0) / max * 120 + 8) + "px";
+    bar.title = `${bayLabel(key)} • ${formatMoney(byBay[key])}`;
+    bars.appendChild(bar);
+
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = bayLabel(key).replace("Bay ", "");
+    labels.appendChild(label);
+  });
+}
+
+function renderTransactions(items){
+  const body = document.getElementById("tx-body");
+  body.innerHTML = "";
+  if(!items.length){
+    body.innerHTML = '<tr><td colspan="5" class="muted">No transactions yet</td></tr>';
+    return;
+  }
+  items.forEach(tx => {
+    const paid = Number(tx.amount || 0);
+    const credit = Number(tx.creditAmount || paid);
+    const amountDisplay = credit > paid
+      ? `${formatMoney(paid)} → ${formatMoney(credit)}`
+      : formatMoney(paid);
+    const statusClass = tx.status === "failed" ? "status fail" : "status";
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${formatDate(tx.createdAt)}</td>
+      <td>${tx.boxNum ? bayLabel(tx.boxNum) : "-"}</td>
+      <td>${amountDisplay}</td>
+      <td>${tx.payId || "-"}</td>
+      <td><span class="${statusClass}">${tx.status || "ok"}</span></td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function renderAlerts(items){
+  const list = document.getElementById("alerts-list");
+  list.innerHTML = "";
+  if(!items.length){
+    list.innerHTML = '<div class="muted">No alerts</div>';
+    return;
+  }
+  items.forEach(tx => {
+    const alert = document.createElement("div");
+    alert.className = "alert";
+    alert.innerHTML = `
+      <strong>${tx.boxNum ? bayLabel(tx.boxNum) : "Bay -"} • ${formatMoney(tx.amount)}</strong>
+      <small>${tx.error || "Machine did not start"}</small>
+    `;
+    list.appendChild(alert);
+  });
+}
+
+function renderForecast(transactions){
+  const list = document.getElementById("forecast-list");
+  if(!list){
+    return;
+  }
+  const now = new Date();
+  const totalsByDay = {};
+  const daysBack = 7;
+  for(let i = 0; i < daysBack; i += 1){
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    totalsByDay[key] = 0;
+  }
+  transactions.forEach(tx => {
+    if(!tx.createdAt || String(tx.status || "").toLowerCase() === "failed"){
+      return;
+    }
+    const key = new Date(tx.createdAt).toISOString().slice(0, 10);
+    if(key in totalsByDay){
+      totalsByDay[key] += Number(tx.amount || 0);
+    }
+  });
+  const dayKeys = Object.keys(totalsByDay);
+  const total = dayKeys.reduce((sum, key) => sum + totalsByDay[key], 0);
+  const avg = dayKeys.length ? total / dayKeys.length : 0;
+  list.innerHTML = "";
+  for(let i = 1; i <= 7; i += 1){
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const label = d.toLocaleDateString(undefined, { weekday:"short", day:"2-digit", month:"short" });
+    const row = document.createElement("div");
+    row.className = "forecast-item";
+    row.innerHTML = `<span>${label}</span><strong>${formatMoney(avg)}</strong>`;
+    list.appendChild(row);
+  }
+  if(!dayKeys.length){
+    list.innerHTML = '<div class="muted">Not enough data yet</div>';
+  }
+}
+
+function renderHourlyDemand(transactions){
+  const bars = document.getElementById("hour-bars");
+  const labels = document.getElementById("hour-labels");
+  if(!bars || !labels){
+    return;
+  }
+  const buckets = Array(8).fill(0);
+  transactions.forEach(tx => {
+    if(!tx.createdAt || String(tx.status || "").toLowerCase() === "failed"){
+      return;
+    }
+    const hour = new Date(tx.createdAt).getHours();
+    const bucket = Math.floor(hour / 3);
+    buckets[bucket] += 1;
+  });
+  const max = Math.max(...buckets, 1);
+  bars.innerHTML = "";
+  labels.innerHTML = "";
+  const labelsText = ["0-2","3-5","6-8","9-11","12-14","15-17","18-20","21-23"];
+  buckets.forEach((count, idx) => {
+    const bar = document.createElement("div");
+    bar.className = "mini-bar";
+    bar.style.height = (count / max * 110 + 6) + "px";
+    bar.title = `${labelsText[idx]} • ${count} top-ups`;
+    bars.appendChild(bar);
+
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = labelsText[idx];
+    labels.appendChild(label);
+  });
+}
+
+function renderStatusStrip(transactions){
+  const strip = document.getElementById("status-strip");
+  if(!strip){
+    return;
+  }
+
+  const byBay = new Map();
+  transactions.forEach(tx => {
+    if(!tx.boxNum || !tx.createdAt){
+      return;
+    }
+    const key = String(tx.boxNum);
+    const ts = new Date(tx.createdAt).getTime();
+    const existing = byBay.get(key);
+    if(!existing || ts > existing.ts){
+      byBay.set(key, { ...tx, ts });
+    }
+  });
+
+  strip.innerHTML = "";
+  let bays = dashboardBays.length ? dashboardBays : Array.from(byBay.keys());
+  if(!bays.length && DEFAULT_BAYS.length){
+    bays = DEFAULT_BAYS.slice();
+  } else if(DEFAULT_BAYS.length){
+    // Ensure we always show all default bays unless explicitly removed
+    const merged = Array.from(new Set([...bays, ...DEFAULT_BAYS]));
+    bays = merged;
+  }
+  if(!bays.length){
+    strip.innerHTML = '<div class="muted">No bay status yet</div>';
+    return;
+  }
+
+  bays.forEach((bay, index) => {
+    const key = String(bay);
+    const last = byBay.get(key);
+    const title = bayLabel(key);
+    const metaPrefix = `Box ${key} • `;
+    let statusClass = "warn";
+    let statusText = "Idle";
+    let subText = metaPrefix + "No recent payments";
+
+    if(last){
+      const minsAgo = (Date.now() - last.ts) / 60000;
+      const isFailed = String(last.status || "").toLowerCase() === "failed";
+      if(isFailed){
+        statusClass = "bad";
+        statusText = "Needs check";
+        subText = `${metaPrefix}Last attempt failed`;
+      } else if(minsAgo > bayAlertMinutes){
+        statusClass = "warn";
+        statusText = "Idle";
+        subText = `${metaPrefix}Last payment ${timeAgo(last.ts)}`;
+      } else {
+        statusClass = "ok";
+        statusText = "Online";
+        subText = `${metaPrefix}Last payment ${timeAgo(last.ts)}`;
+      }
+    }
+
+    const chip = document.createElement("div");
+    chip.className = `status-chip ${statusClass}`;
+    chip.innerHTML = `
+      <div class="chip-header">
+        <div class="chip-title">${title}</div>
+        <div class="chip-dot"></div>
+      </div>
+      <div class="chip-status">${statusText}</div>
+      <div class="chip-sub">${subText}</div>
+    `;
+    strip.appendChild(chip);
+  });
+}
+
+function renderHeatmap(transactions){
+  const grid = document.getElementById("heatmap");
+  if(!grid){
+    return;
+  }
+  const counts = Array(24).fill(0);
+  transactions.forEach(tx => {
+    if(!tx.createdAt || String(tx.status || "").toLowerCase() === "failed"){
+      return;
+    }
+    const hour = new Date(tx.createdAt).getHours();
+    counts[hour] += 1;
+  });
+  const max = Math.max(...counts, 1);
+  grid.innerHTML = "";
+  counts.forEach((count, hour) => {
+    const intensity = count / max;
+    const cell = document.createElement("div");
+    cell.className = "heat-cell";
+    cell.style.background = `rgba(206,17,38,${0.15 + intensity * 0.7})`;
+    cell.innerHTML = `<strong>${hour}:00</strong><span>${count} top-ups</span>`;
+    grid.appendChild(cell);
+  });
+}
+
+function renderUsers(){
+  const list = document.getElementById("userList");
+  const users = getUsers();
+  list.innerHTML = "";
+  users.forEach((user, index) => {
+    const row = document.createElement("div");
+    row.className = "user-card";
+    row.innerHTML = `<span>${user.name} <small style="color:var(--muted-2)">(${user.role || "staff"})</small></span>`;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "user-btn";
+    resetBtn.textContent = "Reset PIN";
+    resetBtn.onclick = () => {
+      const newPin = String(Math.floor(1000 + Math.random() * 9000));
+      users[index].pin = newPin;
+      setUsers(users);
+      alert(`${user.name} new PIN: ${newPin}`);
+    };
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "user-btn";
+    removeBtn.textContent = "Remove";
+    removeBtn.onclick = () => {
+      const confirmRemove = confirm(`Remove ${user.name}?`);
+      if(!confirmRemove){
+        return;
+      }
+      const next = users.filter((_, i) => i !== index);
+      setUsers(next);
+      renderUsers();
+    };
+
+    actions.appendChild(resetBtn);
+    actions.appendChild(removeBtn);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function buildQuery(){
+  const bay = document.getElementById("filterBay").value;
+  const start = document.getElementById("filterStart").value;
+  const end = document.getElementById("filterEnd").value;
+  const params = new URLSearchParams();
+  if(bay) params.set("bay", bay);
+  if(start) params.set("start", start);
+  if(end) params.set("end", end);
+  const query = params.toString();
+  return query ? "?" + query : "";
+}
+
+function setupSettingsUI(){
+  const staffToggle = document.getElementById("settingsStaffFilters");
+  if(staffToggle){
+    staffToggle.checked = staffFiltersEnabled;
+    staffToggle.addEventListener("change", () => {
+      staffFiltersEnabled = staffToggle.checked;
+      localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, String(staffFiltersEnabled));
+      applyRole();
+    });
+  }
+
+  const bonusToggle = document.getElementById("bonusEnabledToggle");
+  if(bonusToggle){
+    bonusToggle.checked = bonusEnabled;
+    bonusToggle.addEventListener("change", () => {
+      bonusEnabled = bonusToggle.checked;
+      markSettingsDirty();
+      updateBonusControls();
+    });
+  }
+
+  const modeSelect = document.getElementById("bonusModeSelect");
+  if(modeSelect){
+    modeSelect.value = bonusMode;
+    modeSelect.addEventListener("change", () => {
+      bonusMode = modeSelect.value;
+      markSettingsDirty();
+    });
+  }
+
+  const applyRec = document.getElementById("applyBonusRec");
+  if(applyRec){
+    applyRec.addEventListener("click", () => {
+      if(latestRecommendation?.pack){
+        bonusMode = "recommended";
+        bonusPack = latestRecommendation.pack.pay;
+        markSettingsDirty();
+        updateBonusControls();
+      }
+    });
+  }
+
+  const saveBtn = document.getElementById("saveBonusSettings");
+  if(saveBtn){
+    saveBtn.addEventListener("click", () => {
+      saveBonusSettings();
+    });
+  }
+
+  const bayInput = document.getElementById("bonusBaysInput");
+  if(bayInput){
+    bayInput.addEventListener("input", () => {
+      markSettingsDirty();
+    });
+  }
+}
+
+async function loadDashboard(){
+  try {
+    await resolveApiBase();
+    if(!settingsDirty){
+      await loadRemoteSettings();
+      updateBonusControls();
+    }
+    const query = buildQuery();
+    const summary = await fetchJson(API_BASE_URL + "/api/dashboard/summary" + query);
+    renderKpis(summary);
+    renderChart(summary.last7 || []);
+    renderBays(summary.byBay || {});
+    renderBayChart(summary.byBay || {});
+
+    const txQuery = query ? query + "&limit=50" : "?limit=50";
+    const tx = await fetchJson(API_BASE_URL + "/api/dashboard/transactions" + txQuery);
+    renderTransactions(tx.items || []);
+    latestRecommendation = recommendBonusPack(tx.items || []);
+    renderBonusRecommendation(latestRecommendation);
+
+    const alertsQuery = query ? query + "&limit=10" : "?limit=10";
+    const alerts = await fetchJson(API_BASE_URL + "/api/dashboard/alerts" + alertsQuery);
+    renderAlerts(alerts.items || []);
+
+    let healthItems = [];
+    try{
+      const health = await fetchJson(API_BASE_URL + "/api/dashboard/transactions?limit=200");
+      healthItems = health.items || [];
+    }catch(e){
+      healthItems = [];
+    }
+    renderStatusStrip(healthItems);
+    renderForecast(healthItems);
+    renderHourlyDemand(healthItems);
+    renderHeatmap(healthItems);
+
+    const baySelect = document.getElementById("filterBay");
+    if(baySelect.options.length <= 1){
+      const keys = Object.keys(summary.byBay || {});
+      const source = keys.length ? keys : dashboardBays;
+      source.sort((a,b)=>Number(a)-Number(b)).forEach((key, index) => {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = keys.length ? bayLabel(key) : ("Bay " + (index + 1));
+        baySelect.appendChild(option);
+      });
+    }
+    const err = document.getElementById("dashError");
+    if(err) err.style.display = "none";
+  } catch (error) {
+    const err = document.getElementById("dashError");
+    if(err){
+      err.innerHTML = 'Dashboard temporarily offline. <button onclick="retryDashboard()">Retry</button>';
+      err.style.display = "block";
+    }
+    renderStatusStrip([]);
+    renderForecast([]);
+    renderHourlyDemand([]);
+    renderHeatmap([]);
+    renderBonusRecommendation(null);
+  }
+}
+
+function retryDashboard(){
+  loadDashboard();
+}
+
+function startDashboard(){
+  if(dashboardInterval){
+    return;
+  }
+  renderStatusStrip([]);
+  renderForecast([]);
+  renderHourlyDemand([]);
+  renderHeatmap([]);
+  loadDashboard();
+  dashboardInterval = setInterval(loadDashboard, 180000);
+}
+
+function unlockIfPinMatches(){
+  const val = document.getElementById("pinInput").value.trim();
+  const users = getUsers();
+  const admin = getAdminPin();
+  const match = users.find(u => u.pin === val);
+  const isAdmin = val === admin;
+  if(match || isAdmin){
+    if(isAdmin){
+      localStorage.setItem("luxwash_dash_role", "owner");
+    } else {
+      localStorage.setItem("luxwash_dash_role", match.role || "staff");
+    }
+    localStorage.setItem("luxwash_dash_unlocked", "true");
+    document.getElementById("loginScreen").style.display = "none";
+    applyRole();
+    startDashboard();
+  } else {
+    document.getElementById("pinErr").style.display = "block";
+  }
+}
+
+function applyRole(){
+  const role = localStorage.getItem("luxwash_dash_role") || "staff";
+  const usersCard = document.getElementById("usersCard");
+  const bonusCard = document.getElementById("bonusCard");
+  if(role !== "owner"){
+    usersCard.style.display = "none";
+    if(bonusCard) bonusCard.style.display = "none";
+  } else {
+    usersCard.style.display = "block";
+    if(bonusCard) bonusCard.style.display = "block";
+  }
+  const filters = document.querySelector(".filters");
+  const actions = document.querySelector(".actions");
+  if(role === "staff" && !staffFiltersEnabled){
+    if(filters) filters.style.display = "none";
+    if(actions) actions.style.display = "none";
+  } else {
+    if(filters) filters.style.display = "flex";
+    if(actions) actions.style.display = "flex";
+  }
+}
+
+if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
+  document.getElementById("loginScreen").style.display = "none";
+  applyRole();
+  startDashboard();
+}
+
+document.getElementById("pinBtn").addEventListener("click", unlockIfPinMatches);
+document.getElementById("pinInput").addEventListener("keypress", (e) => {
+  if(e.key === "Enter") unlockIfPinMatches();
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("luxwash_dash_unlocked");
+  localStorage.removeItem("luxwash_dash_role");
+  document.getElementById("loginScreen").style.display = "flex";
+});
+
+document.getElementById("csvBtn").addEventListener("click", () => {
+  const query = buildQuery();
+  window.open(API_BASE_URL + "/api/dashboard/transactions.csv" + query, "_blank");
+});
+
+document.getElementById("printBtn").addEventListener("click", () => {
+  window.print();
+});
+
+document.getElementById("printDaily").addEventListener("click", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById("filterStart").value = today;
+  document.getElementById("filterEnd").value = today;
+  loadDashboard().then(() => window.print());
+});
+
+document.getElementById("applyFilters").addEventListener("click", () => loadDashboard());
+document.getElementById("clearFilters").addEventListener("click", () => {
+  document.getElementById("filterBay").value = "";
+  document.getElementById("filterStart").value = "";
+  document.getElementById("filterEnd").value = "";
+  loadDashboard();
+});
+
+document.getElementById("addUserBtn").addEventListener("click", () => {
+  const name = document.getElementById("newUserName").value.trim();
+  const pin = document.getElementById("newUserPin").value.trim();
+  const role = document.getElementById("newUserRole").value;
+  if(!name || pin.length < 4){
+    alert("Enter a name and a 4+ digit PIN");
+    return;
+  }
+  const users = getUsers();
+  users.push({name, pin, role});
+  setUsers(users);
+  document.getElementById("newUserName").value = "";
+  document.getElementById("newUserPin").value = "";
+  renderUsers();
+});
+
+document.getElementById("saveAdminPin").addEventListener("click", () => {
+  const pin = document.getElementById("adminPinInput").value.trim();
+  if(pin.length < 4){
+    alert("Admin PIN must be at least 4 digits");
+    return;
+  }
+  setAdminPin(pin);
+  document.getElementById("adminPinInput").value = "";
+  alert("Admin PIN updated");
+});
+
+loadSettings();
+setupSettingsUI();
+renderUsers();
+renderBonusRecommendation(null);
+updateApiStatus();
+setInterval(updateApiStatus, 30000);
+if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
+  document.getElementById("loginScreen").style.display = "none";
+  applyRole();
+  startDashboard();
+}
+
+if(LOGO_URL){
+  document.getElementById("logoImg").src = LOGO_URL;
+} else {
+  document.getElementById("logoImg").style.display = "none";
+}
+</script>
+<script>
+function googleTranslateElementInit(){
+  if(window.google && google.translate && google.translate.TranslateElement){
+    new google.translate.TranslateElement({ pageLanguage: "en", layout: google.translate.TranslateElement.InlineLayout.SIMPLE }, "google_translate_element");
+  }
+}
+</script>
+<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</body>
+</html>
