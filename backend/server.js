@@ -302,6 +302,15 @@ function parseBoxNum(input) {
   return parsed;
 }
 
+function formatBayLabel(boxNum, bays) {
+  const list = Array.isArray(bays) ? bays.map(String) : [];
+  const idx = list.findIndex((bay) => String(bay) === String(boxNum));
+  if (idx >= 0) {
+    return `Bay ${idx + 1}`;
+  }
+  return `Bay ${boxNum}`;
+}
+
 function joinUnipayPath(path) {
   return new URL(path.replace(/^\/+/, ""), unipayBaseUrl).toString();
 }
@@ -851,6 +860,9 @@ app.post("/api/topup/create-session", async (req, res) => {
 
     await checkBoxAvailability(boxNum, creditAmount);
 
+    const settings = await readSettings();
+    const bayLabel = formatBayLabel(boxNum, settings?.bays || defaultBays);
+
     const successUrl = `${publicAppUrl}${publicTopupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${publicAppUrl}${publicTopupPath}?payment=cancelled`;
 
@@ -879,8 +891,8 @@ app.post("/api/topup/create-session", async (req, res) => {
             currency: stripeCurrency,
             unit_amount: Math.round(amountCharged * 100),
             product_data: {
-              name: `LuxWash Top Up - Bay ${boxNum}`,
-              description: `Machine top-up £${amountCharged.toFixed(2)}${bonusAmount > 0 ? ` (+£${bonusAmount.toFixed(2)} bonus)` : ""}`,
+              name: `LuxWash Top Up - ${bayLabel}`,
+              description: `Machine top-up £${amountCharged.toFixed(2)}${bonusAmount > 0 ? ` (+£${bonusAmount.toFixed(2)} bonus)` : ""}${bayLabel === `Bay ${boxNum}` ? "" : ` • Box ${boxNum}`}`,
             },
           },
         },
