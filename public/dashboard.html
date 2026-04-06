@@ -1308,6 +1308,11 @@ renderUsers();
 renderBonusRecommendation(null);
 updateApiStatus();
 setInterval(updateApiStatus, 30000);
+if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
+  document.getElementById("loginScreen").style.display = "none";
+  applyRole();
+  startDashboard();
+}
 
 if(LOGO_URL){
   document.getElementById("logoImg").src = LOGO_URL;
