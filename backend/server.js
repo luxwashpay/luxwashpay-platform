@@ -57,7 +57,7 @@ const transactionsFile = path.join(__dirname, "data", "transactions.json");
 let memoryTransactions = null;
 const settingsFile = path.join(__dirname, "data", "settings.json");
 let memorySettings = null;
-const settingsStore = env("SETTINGS_STORE", process.env.VERCEL && stripeSecretKey ? "stripe" : "file").toLowerCase();
+const settingsStore = env("SETTINGS_STORE", "file").toLowerCase();
 let stripeAccountCache = null;
 let stripeAccountCacheAt = 0;
 const STRIPE_SETTINGS_CACHE_MS = 5 * 60 * 1000;
@@ -204,18 +204,24 @@ async function readSettings() {
 
 async function writeSettings(settings) {
   if (settingsStore === "stripe" && stripe) {
-    const metadata = {
-      luxwash_bonus_enabled: settings.bonusEnabled ? "1" : "0",
-      luxwash_bonus_mode: settings.bonusMode || "manual",
-      luxwash_bonus_pack: String(settings.bonusPack || ""),
-      luxwash_bonus_packs: JSON.stringify(settings.bonusPacks || []),
-      luxwash_bays: Array.isArray(settings.bays) ? settings.bays.join(",") : "",
-    };
-    const account = await getStripeAccount();
-    if (account?.id) {
-      await stripe.accounts.update(account.id, { metadata });
-      memorySettings = settings;
-      return;
+    try {
+      const metadata = {
+        luxwash_bonus_enabled: settings.bonusEnabled ? "1" : "0",
+        luxwash_bonus_mode: settings.bonusMode || "manual",
+        luxwash_bonus_pack: String(settings.bonusPack || ""),
+        luxwash_bonus_packs: JSON.stringify(settings.bonusPacks || []),
+        luxwash_bays: Array.isArray(settings.bays) ? settings.bays.join(",") : "",
+      };
+      const account = await getStripeAccount();
+      if (account?.id) {
+        await stripe.accounts.update(account.id, { metadata });
+        memorySettings = settings;
+        return;
+      }
+    } catch (error) {
+      if (!/permission|provided key|required permissions|rak_/i.test(String(error?.message || ""))) {
+        throw error;
+      }
     }
   }
   try {

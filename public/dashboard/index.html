@@ -512,12 +512,24 @@ function timeAgo(ts){
   return `${days}d ago`;
 }
 
-async function fetchJson(url){
-  const res = await fetch(url);
-  if(!res.ok){
-    throw new Error("Dashboard API error");
+async function fetchJson(url, options){
+  let res;
+  try{
+    res = await fetch(url, { cache: "no-store", ...(options || {}) });
+  }catch(e){
+    throw new Error("Dashboard API request failed");
   }
-  return await res.json();
+  const text = await res.text();
+  let data = {};
+  try{
+    data = text ? JSON.parse(text) : {};
+  }catch(e){
+    data = { error: text || "Unexpected server response" };
+  }
+  if(!res.ok){
+    throw new Error(data.error || "Dashboard API error");
+  }
+  return data;
 }
 
 async function resolveApiBase(){
@@ -525,12 +537,14 @@ async function resolveApiBase(){
     return apiReadyPromise;
   }
   apiReadyPromise = (async () => {
-    const candidates = [];
+    let candidates = [];
+    let found = false;
     // Prefer same-origin relative API to avoid CORS/redirect issues.
     try{
       const res = await fetch("/api/health", { cache: "no-store" });
       if(res.ok){
         API_BASE_URL = "";
+        found = true;
         return API_BASE_URL;
       }
     }catch(e){}
@@ -561,11 +575,15 @@ async function resolveApiBase(){
         const res = await fetch(base.replace(/\/+$/, "") + "/api/health", { cache: "no-store" });
         if(res.ok){
           API_BASE_URL = base.replace(/\/+$/, "");
+          found = true;
           return API_BASE_URL;
         }
       } catch (e) {
         // ignore and try next
       }
+    }
+    if(!found){
+      apiReadyPromise = null;
     }
     return API_BASE_URL;
   })();
@@ -730,6 +748,7 @@ async function saveBonusSettings(){
     });
     applyRemoteSettings(res);
     updateBonusControls();
+    settingsDirty = false;
     alert("Bonus settings saved to live page");
   }catch(e){
     alert("Unable to save bonus settings: " + e.message);
@@ -1174,7 +1193,8 @@ async function loadDashboard(){
   } catch (error) {
     const err = document.getElementById("dashError");
     if(err){
-      err.innerHTML = 'Dashboard temporarily offline. <button onclick="retryDashboard()">Retry</button>';
+      const msg = error && error.message ? error.message : "Dashboard temporarily offline.";
+      err.innerHTML = `${msg}. <button onclick="retryDashboard()">Retry</button>`;
       err.style.display = "block";
     }
     renderStatusStrip([]);
