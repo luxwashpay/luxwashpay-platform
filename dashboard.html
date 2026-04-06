@@ -46,6 +46,10 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .logo-line{width:10px;height:24px;border-radius:2px}
 .logo-text span{color:var(--red)}
 .top-actions{display:flex;align-items:center;gap:12px}
+.api-pill{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+.api-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);box-shadow:0 0 8px rgba(255,255,255,0.15)}
+.api-pill.online .api-dot{background:var(--green);box-shadow:0 0 10px rgba(15,191,117,0.8)}
+.api-pill.offline .api-dot{background:#ff4d6d;box-shadow:0 0 10px rgba(255,77,109,0.8)}
 .translate-wrap{display:flex;align-items:center;gap:8px}
 .translate-label{font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
 .goog-te-gadget{color:var(--muted) !important}
@@ -169,11 +173,12 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       <img class="logo-img" id="logoImg" alt="LuxWash logo" />
       <div class="logo-text">Lux<span>Wash</span> Ops</div>
     </div>
-    <div class="top-actions">
-      <div class="translate-wrap">
-        <div class="translate-label">Translate</div>
-        <div id="google_translate_element"></div>
-      </div>
+  <div class="top-actions">
+    <div class="api-pill" id="apiStatus"><span class="api-dot"></span><span id="apiStatusText">API</span></div>
+    <div class="translate-wrap">
+      <div class="translate-label">Translate</div>
+      <div id="google_translate_element"></div>
+    </div>
       <div class="badge">Live Dashboard</div>
       <button class="logout" id="logoutBtn">Log out</button>
     </div>
@@ -380,9 +385,6 @@ const origin = window.location && window.location.origin && window.location.orig
 const apexOrigin = origin && origin.indexOf("://www.") !== -1
   ? origin.replace("://www.", "://")
   : "";
-if(origin && origin.indexOf("://www.") !== -1){
-  window.location.replace(apexOrigin + window.location.pathname + window.location.search + window.location.hash);
-}
 let API_BASE_URL = window.LUXWASH_API_BASE_URL || apexOrigin || origin || "https://luxwashpay.com";
 let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
@@ -565,6 +567,27 @@ function renderKpis(summary){
   document.getElementById("kpi-week-count").textContent = summary.counts.week + " transactions";
   document.getElementById("kpi-month-count").textContent = summary.counts.month + " transactions";
   document.getElementById("kpi-all-count").textContent = summary.counts.all + " transactions";
+}
+
+async function updateApiStatus(){
+  const pill = document.getElementById("apiStatus");
+  const label = document.getElementById("apiStatusText");
+  if(!pill || !label){
+    return;
+  }
+  label.textContent = "API";
+  pill.classList.remove("online", "offline");
+  try{
+    await resolveApiBase();
+    const res = await fetch(API_BASE_URL + "/api/health", { cache: "no-store" });
+    if(res.ok){
+      pill.classList.add("online");
+      label.textContent = "API Online";
+      return;
+    }
+  }catch(e){}
+  pill.classList.add("offline");
+  label.textContent = "API Offline";
 }
 
 function median(values){
@@ -1243,11 +1266,9 @@ document.getElementById("saveAdminPin").addEventListener("click", () => {
 
 loadSettings();
 setupSettingsUI();
-if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
-  applyRole();
-  startDashboard();
-}
 renderUsers();
+updateApiStatus();
+setInterval(updateApiStatus, 30000);
 
 if(LOGO_URL){
   document.getElementById("logoImg").src = LOGO_URL;
