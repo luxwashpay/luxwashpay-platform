@@ -594,15 +594,17 @@
     var creditAmt = 2;
     var isBusy = false;
     var selectedBoxNum = null;
-    var presetValues = [2, 3, 5, 10, 20];
-    var bonusEnabled = false;
-    var bonusMode = "manual";
-    var bonusPack = null;
-    var bayOptions = [];
-    var bonusPacks = [
-      { pay: 6, credit: 7 },
-      { pay: 10, credit: 11 },
-      { pay: 20, credit: 23 }
+	    var presetValues = [2, 3, 5, 10, 20];
+	    var bonusEnabled = false;
+	    var bonusMode = "manual";
+	    var bonusDisplayMode = "selected";
+	    var bonusPack = null;
+	    var bayOptions = [];
+	    var bonusPacks = [
+	      { pay: 5, credit: 6 },
+	      { pay: 6, credit: 7 },
+	      { pay: 10, credit: 11 },
+	      { pay: 20, credit: 23 }
     ];
     var selectedBonusIndex = -1;
 
@@ -622,10 +624,10 @@
         btn.classList.toggle("on", presetValues[index] === amt);
         btn.disabled = isBusy;
       });
-      document.querySelectorAll(".bonus-btn").forEach(function (btn, index) {
-        btn.classList.toggle("on", index === selectedBonusIndex);
-        btn.disabled = isBusy;
-      });
+	      document.querySelectorAll(".bonus-btn").forEach(function (btn, index) {
+	        btn.classList.toggle("on", Number(btn.getAttribute("data-pay")) === amt && creditAmt > amt);
+	        btn.disabled = isBusy;
+	      });
     }
 
     function ui() {
@@ -709,19 +711,25 @@
       ui();
     }
 
-    function setBonus(index) {
-      if (isBusy) {
-        return;
-      }
-      var pack = bonusPacks[index];
-      if (!pack) {
-        return;
-      }
-      selectedBonusIndex = index;
-      amt = pack.pay;
-      creditAmt = pack.credit;
-      ui();
-    }
+	    function setBonus(index) {
+	      if (isBusy) {
+	        return;
+	      }
+	      var pack = bonusPacks[index];
+	      setBonusPack(pack);
+	    }
+
+	    function setBonusPack(pack) {
+	      if (isBusy || !pack) {
+	        return;
+	      }
+	      selectedBonusIndex = bonusPacks.findIndex(function (item) {
+	        return Number(item.pay) === Number(pack.pay) && Number(item.credit) === Number(pack.credit);
+	      });
+	      amt = pack.pay;
+	      creditAmt = pack.credit;
+	      ui();
+	    }
 
     function setButtonLoading(loading, label) {
       var button = document.getElementById("topupbtn");
@@ -981,17 +989,37 @@
       frame();
     }
 
-    function setBayOptions(list) {
-      if (Array.isArray(list) && list.length) {
-        bayOptions = list.map(String);
-      } else if (Array.isArray(window.LUXWASH_BAYS) && window.LUXWASH_BAYS.length) {
+	    function setBayOptions(list) {
+	      if (Array.isArray(list) && list.length) {
+	        bayOptions = list.map(String);
+	      } else if (Array.isArray(window.LUXWASH_BAYS) && window.LUXWASH_BAYS.length) {
         bayOptions = window.LUXWASH_BAYS.map(String);
       } else {
         bayOptions = ["260529", "260530", "260531", "260532", "260533"];
-      }
-    }
+	      }
+	    }
 
-    function renderBayOptions() {
+	    function mergeBonusPacksWithDefaults(packs) {
+	      var defaults = [
+	        { pay: 5, credit: 6 },
+	        { pay: 6, credit: 7 },
+	        { pay: 10, credit: 11 },
+	        { pay: 20, credit: 23 },
+	      ];
+	      var map = {};
+	      defaults.forEach(function (pack) {
+	        map[String(pack.pay)] = pack;
+	      });
+	      (Array.isArray(packs) ? packs : []).forEach(function (pack) {
+	        var normalised = { pay: Number(pack.pay), credit: Number(pack.credit) };
+	        if (Number.isFinite(normalised.pay) && Number.isFinite(normalised.credit) && normalised.credit >= normalised.pay) {
+	          map[String(normalised.pay)] = normalised;
+	        }
+	      });
+	      return Object.keys(map).map(function (key) { return map[key]; }).sort(function (a, b) { return a.pay - b.pay; });
+	    }
+
+	    function renderBayOptions() {
       var grid = document.getElementById("bay-grid");
       if (!grid) {
         return;
@@ -1036,16 +1064,20 @@
         if (typeof settings.bonusEnabled === "boolean") {
           bonusEnabled = settings.bonusEnabled;
         }
-        if (settings.bonusMode === "manual" || settings.bonusMode === "recommended") {
-          bonusMode = settings.bonusMode;
-        }
-        if (Array.isArray(settings.bonusPacks) && settings.bonusPacks.length) {
-          bonusPacks = settings.bonusPacks.map(function (pack) {
-            return { pay: Number(pack.pay), credit: Number(pack.credit) };
-          }).filter(function (pack) {
-            return Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay;
-          });
-        }
+	        if (settings.bonusMode === "manual" || settings.bonusMode === "recommended") {
+	          bonusMode = settings.bonusMode;
+	        }
+	        if (settings.bonusDisplayMode === "selected" || settings.bonusDisplayMode === "all") {
+	          bonusDisplayMode = settings.bonusDisplayMode;
+	        }
+	        if (Array.isArray(settings.bonusPacks) && settings.bonusPacks.length) {
+	          var parsedPacks = settings.bonusPacks.map(function (pack) {
+	            return { pay: Number(pack.pay), credit: Number(pack.credit) };
+	          }).filter(function (pack) {
+	            return Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay;
+	          });
+	          bonusPacks = mergeBonusPacksWithDefaults(parsedPacks);
+	        }
         if (Number.isFinite(Number(settings.bonusPack))) {
           bonusPack = Number(settings.bonusPack);
         }
@@ -1074,27 +1106,44 @@
       }
     }
 
-    function renderBonusPacks() {
-      var row = document.getElementById("bonus-row");
-      var section = document.getElementById("bonus-section");
-      if (section) {
-        section.classList.toggle("hidden", !bonusEnabled);
-      }
-      if (!row) {
-        return;
-      }
-      row.innerHTML = "";
-      if (!bonusEnabled) {
-        return;
-      }
-      bonusPacks.forEach(function (pack, index) {
-        var btn = document.createElement("button");
-        btn.className = "bonus-btn";
-        btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
-        btn.onclick = function () { setBonus(index); };
-        row.appendChild(btn);
-      });
-    }
+	    function renderBonusPacks() {
+	      var row = document.getElementById("bonus-row");
+	      var section = document.getElementById("bonus-section");
+	      var visiblePacks = getVisibleBonusPacks();
+	      if (section) {
+	        section.classList.toggle("hidden", !bonusEnabled || visiblePacks.length === 0);
+	      }
+	      if (!row) {
+	        return;
+	      }
+	      row.innerHTML = "";
+	      if (!bonusEnabled || visiblePacks.length === 0) {
+	        return;
+	      }
+	      visiblePacks.forEach(function (pack) {
+	        var btn = document.createElement("button");
+	        btn.className = "bonus-btn";
+	        btn.setAttribute("data-pay", String(pack.pay));
+	        btn.textContent = "£" + pack.pay + " → £" + pack.credit.toFixed(2);
+	        btn.onclick = function () { setBonusPack(pack); };
+	        row.appendChild(btn);
+	      });
+	      syncAmountControls();
+	    }
+
+	    function getVisibleBonusPacks() {
+	      if (!bonusEnabled) {
+	        return [];
+	      }
+	      if (bonusDisplayMode === "all") {
+	        return bonusPacks.slice();
+	      }
+	      var selectedPay = Number(bonusPack || (bonusPacks[0] && bonusPacks[0].pay));
+	      var selected = bonusPacks.find(function (pack) {
+	        return Number(pack.pay) === selectedPay;
+	      });
+	      return selected ? [selected] : [];
+	    }
 
     async function initPage() {
       readBoxNumFromQuery();

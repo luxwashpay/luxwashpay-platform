@@ -67,7 +67,7 @@ const DASHBOARD_STRIPE_SESSION_LIMIT = Math.max(1, Math.min(1000, Number(env("DA
 const dashboardAdminPin = env("DASHBOARD_ADMIN_PIN", "");
 const requireDashboardPin = dashboardAdminPin && dashboardAdminPin.length >= 3;
 const defaultBaysEnv = env("LUXWASH_BAYS", "260529,260530,260531,260532,260533");
-const defaultBonusPacksEnv = env("BONUS_PACKS", "6:7,10:11,20:23");
+const defaultBonusPacksEnv = env("BONUS_PACKS", "5:6,6:7,10:11,20:23");
 
 let tokenCache = { value: "", expiresAt: 0 };
 let autoAuthStrategyName = "";
@@ -143,13 +143,22 @@ function parseStaffVisibility(value) {
 
 const defaultBays = parseBays(defaultBaysEnv);
 const defaultBonusPacks = parseBonusPacks(defaultBonusPacksEnv);
+const fallbackBonusPacks = defaultBonusPacks.length ? defaultBonusPacks : [{ pay: 5, credit: 6 }, { pay: 6, credit: 7 }, { pay: 10, credit: 11 }, { pay: 20, credit: 23 }];
+
+function mergeBonusPacksWithDefaults(value) {
+  const merged = new Map();
+  fallbackBonusPacks.forEach((pack) => merged.set(String(pack.pay), pack));
+  parseBonusPacks(value).forEach((pack) => merged.set(String(pack.pay), pack));
+  return Array.from(merged.values()).sort((a, b) => a.pay - b.pay);
+}
 
 function getDefaultSettings() {
   return {
     bonusEnabled: false,
     bonusMode: "manual",
-    bonusPack: defaultBonusPacks[0]?.pay || 6,
-    bonusPacks: defaultBonusPacks.length ? defaultBonusPacks : [{ pay: 6, credit: 7 }, { pay: 10, credit: 11 }, { pay: 20, credit: 23 }],
+    bonusDisplayMode: "selected",
+    bonusPack: fallbackBonusPacks[0]?.pay || 5,
+    bonusPacks: fallbackBonusPacks,
     bays: defaultBays.length ? defaultBays : [String(unipayDefaultBoxNum)],
     staffVisibility: getDefaultStaffVisibility(),
   };
@@ -165,6 +174,9 @@ function parseSettingsFromMetadata(meta) {
   }
   if (meta.luxwash_bonus_mode === "manual" || meta.luxwash_bonus_mode === "recommended") {
     next.bonusMode = meta.luxwash_bonus_mode;
+  }
+  if (meta.luxwash_bonus_display_mode === "selected" || meta.luxwash_bonus_display_mode === "all") {
+    next.bonusDisplayMode = meta.luxwash_bonus_display_mode;
   }
   if (meta.luxwash_bonus_pack && Number.isFinite(Number(meta.luxwash_bonus_pack))) {
     next.bonusPack = Number(meta.luxwash_bonus_pack);
@@ -213,9 +225,10 @@ async function readSettings() {
       const account = await getStripeAccount();
       const metaSettings = parseSettingsFromMetadata(account?.metadata);
       if (metaSettings) {
-        const merged = { ...getDefaultSettings(), ...metaSettings };
-        memorySettings = merged;
-        return merged;
+          const merged = { ...getDefaultSettings(), ...metaSettings };
+          merged.bonusPacks = mergeBonusPacksWithDefaults(merged.bonusPacks);
+          memorySettings = merged;
+          return merged;
       }
     } catch (_) {
       // fall through to file
@@ -225,7 +238,9 @@ async function readSettings() {
     const raw = await fs.readFile(settingsFile, "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      return { ...getDefaultSettings(), ...parsed };
+      const merged = { ...getDefaultSettings(), ...parsed };
+      merged.bonusPacks = mergeBonusPacksWithDefaults(merged.bonusPacks);
+      return merged;
     }
     return getDefaultSettings();
   } catch (error) {
@@ -246,6 +261,7 @@ async function writeSettings(settings) {
       const metadata = {
         luxwash_bonus_enabled: settings.bonusEnabled ? "1" : "0",
         luxwash_bonus_mode: settings.bonusMode || "manual",
+        luxwash_bonus_display_mode: settings.bonusDisplayMode || "selected",
         luxwash_bonus_pack: String(settings.bonusPack || ""),
         luxwash_bonus_packs: JSON.stringify(settings.bonusPacks || []),
         luxwash_bays: Array.isArray(settings.bays) ? settings.bays.join(",") : "",
@@ -284,17 +300,20 @@ function sanitizeSettings(payload, current) {
   if (payload?.bonusMode === "manual" || payload?.bonusMode === "recommended") {
     next.bonusMode = payload.bonusMode;
   }
+  if (payload?.bonusDisplayMode === "selected" || payload?.bonusDisplayMode === "all") {
+    next.bonusDisplayMode = payload.bonusDisplayMode;
+  }
   if (payload?.bonusPack !== undefined && Number.isFinite(Number(payload.bonusPack))) {
     next.bonusPack = Number(payload.bonusPack);
   }
   if (payload?.bonusPacks !== undefined) {
     const parsed = parseBonusPacks(payload.bonusPacks);
-    if (parsed.length) {
-      next.bonusPacks = parsed;
-      if (!parsed.find((pack) => pack.pay === next.bonusPack)) {
-        next.bonusPack = parsed[0].pay;
+      if (parsed.length) {
+        next.bonusPacks = mergeBonusPacksWithDefaults(parsed);
+        if (!parsed.find((pack) => pack.pay === next.bonusPack)) {
+          next.bonusPack = next.bonusPacks[0].pay;
+        }
       }
-    }
   }
   if (payload?.bays !== undefined) {
     const parsed = parseBays(payload.bays);

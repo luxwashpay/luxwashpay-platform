@@ -106,10 +106,17 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .heat-cell{height:40px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:0.6rem;color:var(--muted-2)}
 .heat-cell strong{font-size:0.7rem;color:var(--white)}
 
-.bay-list{display:grid;gap:10px}
-.bay-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
-.bay-name{font-size:0.8rem;color:var(--muted)}
-.bay-value{font-family:'Space Grotesk',sans-serif;font-weight:600}
+	.bay-list{display:grid;gap:10px}
+	.bay-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
+	.bay-name{font-size:0.8rem;color:var(--muted)}
+	.bay-value{font-family:'Space Grotesk',sans-serif;font-weight:600}
+	.bay-performance-list{display:grid;gap:10px;width:100%;height:auto;align-self:stretch}
+	.bay-performance-row{display:grid;grid-template-columns:88px 1fr 86px;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);background:rgba(255,255,255,0.02)}
+	.bay-performance-label{font-family:'Space Grotesk',sans-serif;font-size:0.82rem;font-weight:700;color:var(--white)}
+	.bay-performance-track{height:10px;border-radius:999px;background:rgba(255,255,255,0.06);overflow:hidden}
+	.bay-performance-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,rgba(206,17,38,0.35),var(--red))}
+	.bay-performance-value{text-align:right;font-family:'Space Grotesk',sans-serif;font-size:0.82rem;font-weight:700;color:var(--white)}
+	@media(max-width:640px){.bay-performance-row{grid-template-columns:1fr}.bay-performance-value{text-align:left}}
 
 .table{width:100%;border-collapse:collapse}
 .table th{font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px;border-bottom:1px solid var(--border)}
@@ -324,12 +331,17 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
             Enable bonus packs on live page
           </label>
           <div class="filter-label" style="margin-top:12px">Mode</div>
-          <select class="filter-select" id="bonusModeSelect">
-            <option value="manual">Manual</option>
-            <option value="recommended">Recommended</option>
-          </select>
-          <div class="filter-label" style="margin-top:12px">Manual Pack</div>
-          <div class="bonus-pack-row" id="bonusPackRow"></div>
+	          <select class="filter-select" id="bonusModeSelect">
+	            <option value="manual">Manual</option>
+	            <option value="recommended">Recommended</option>
+	          </select>
+	          <div class="filter-label" style="margin-top:12px">Live Display</div>
+	          <select class="filter-select" id="bonusDisplayModeSelect">
+	            <option value="selected">Selected pack only</option>
+	            <option value="all">Show all bonus packs</option>
+	          </select>
+	          <div class="filter-label" style="margin-top:12px">Manual Pack</div>
+	          <div class="bonus-pack-row" id="bonusPackRow"></div>
           <div class="filter-label" style="margin-top:12px">Recommended Pack</div>
           <div class="bonus-rec" id="bonusRecText">Calculating...</div>
           <button class="filter-btn" id="applyBonusRec" style="margin-top:10px">Apply Recommendation</button>
@@ -441,6 +453,7 @@ const SETTINGS_STAFF_VISIBILITY_KEY = "luxwash_dashboard_staff_visibility";
 const DEFAULT_BAYS = ["260529", "260530", "260531", "260532", "260533"];
 const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
 const DEFAULT_BONUS_PACKS = [
+  { pay: 5, credit: 6 },
   { pay: 6, credit: 7 },
   { pay: 10, credit: 11 },
   { pay: 20, credit: 23 }
@@ -461,6 +474,7 @@ const DEFAULT_STAFF_VISIBILITY = {
 let staffVisibility = { ...DEFAULT_STAFF_VISIBILITY };
 let bonusEnabled = false;
 let bonusMode = "manual";
+let bonusDisplayMode = "selected";
 let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
 let bonusPacks = DEFAULT_BONUS_PACKS.slice();
 let latestRecommendation = null;
@@ -567,11 +581,15 @@ function applyRemoteSettings(settings){
   if(settings.bonusMode === "manual" || settings.bonusMode === "recommended"){
     bonusMode = settings.bonusMode;
   }
+  if(settings.bonusDisplayMode === "selected" || settings.bonusDisplayMode === "all"){
+    bonusDisplayMode = settings.bonusDisplayMode;
+  }
   if(Array.isArray(settings.bonusPacks) && settings.bonusPacks.length){
-    bonusPacks = settings.bonusPacks.map(pack => ({
+    const parsedPacks = settings.bonusPacks.map(pack => ({
       pay: Number(pack.pay),
       credit: Number(pack.credit)
     })).filter(pack => Number.isFinite(pack.pay) && Number.isFinite(pack.credit) && pack.credit >= pack.pay);
+    bonusPacks = mergeBonusPacksWithDefaults(parsedPacks);
   }
   if(Number.isFinite(Number(settings.bonusPack))){
     bonusPack = Number(settings.bonusPack);
@@ -725,6 +743,18 @@ function median(values){
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function mergeBonusPacksWithDefaults(packs){
+  const map = new Map();
+  DEFAULT_BONUS_PACKS.forEach(pack => map.set(String(pack.pay), pack));
+  (Array.isArray(packs) ? packs : []).forEach(pack => {
+    const normalised = { pay: Number(pack.pay), credit: Number(pack.credit) };
+    if(Number.isFinite(normalised.pay) && Number.isFinite(normalised.credit) && normalised.credit >= normalised.pay){
+      map.set(String(normalised.pay), normalised);
+    }
+  });
+  return Array.from(map.values()).sort((a,b)=>a.pay-b.pay);
+}
+
 function recommendBonusPack(transactions){
   const now = Date.now();
   const last30 = transactions.filter(tx => {
@@ -733,6 +763,16 @@ function recommendBonusPack(transactions){
     return ts >= now - 30 * 24 * 60 * 60 * 1000;
   }).filter(tx => tx.status !== "failed");
   const amounts = last30.map(tx => Number(tx.amount || 0)).filter(v => Number.isFinite(v) && v > 0);
+  if(amounts.length < 3){
+    return {
+      pack: bonusPacks.find(pack => Number(pack.pay) === Number(bonusPack)) || bonusPacks[0],
+      medianAmount: amounts.length ? median(amounts) : 0,
+      avgDay: 0,
+      todayTotal: 0,
+      slowDay: false,
+      enoughData: false
+    };
+  }
   const medianAmount = median(amounts);
   let recommended = bonusPacks[0];
   if(medianAmount){
@@ -759,7 +799,8 @@ function recommendBonusPack(transactions){
     medianAmount,
     avgDay,
     todayTotal,
-    slowDay
+    slowDay,
+    enoughData: true
   };
 }
 
@@ -782,8 +823,10 @@ function renderBonusPackButtons(){
 function updateBonusControls(){
   const toggle = document.getElementById("bonusEnabledToggle");
   const modeSelect = document.getElementById("bonusModeSelect");
+  const displayModeSelect = document.getElementById("bonusDisplayModeSelect");
   if(toggle) toggle.checked = bonusEnabled;
   if(modeSelect) modeSelect.value = bonusMode;
+  if(displayModeSelect) displayModeSelect.value = bonusDisplayMode;
   const bayInput = document.getElementById("bonusBaysInput");
   if(bayInput) bayInput.value = dashboardBays.join(",");
   renderBonusPackButtons();
@@ -798,7 +841,7 @@ function renderBonusRecommendation(reco){
   const recEl = document.getElementById("bonusRecText");
   const insight = document.getElementById("bonusInsight");
   const note = document.getElementById("bonusInsightNote");
-  if(!reco){
+  if(!reco || reco.enoughData === false){
     if(recEl) recEl.textContent = "Not enough data yet.";
     if(insight) insight.textContent = "No data available yet.";
     if(note) note.textContent = "";
@@ -829,16 +872,20 @@ async function saveBonusSettings(){
         dashboardBays = list;
       }
     }
-    const payload = {
-      bonusEnabled,
-      bonusMode,
-      bonusPack,
-      bonusPacks,
+	    const liveBonusPack = bonusMode === "recommended" && latestRecommendation?.pack && latestRecommendation.enoughData !== false
+	      ? latestRecommendation.pack.pay
+	      : bonusPack;
+	    const payload = {
+	      bonusEnabled,
+	      bonusMode,
+	      bonusDisplayMode,
+	      bonusPack: liveBonusPack,
+	      bonusPacks,
       bays: dashboardBays,
       staffVisibility,
       pin: getAdminPin()
     };
-    const res = await fetchJson(API_BASE_URL + "/api/settings", {
+	    const res = await fetchJson(API_BASE_URL + "/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -888,27 +935,32 @@ function renderBays(byBay){
 }
 
 function renderBayChart(byBay){
-  const keys = Object.keys(byBay);
   const bars = document.getElementById("bay-bars");
   const labels = document.getElementById("bay-labels");
-  bars.innerHTML = ""; labels.innerHTML = "";
-  if(!keys.length){
+  bars.innerHTML = "";
+  labels.innerHTML = "";
+  bars.className = "bay-performance-list";
+
+  const source = dashboardBays.length ? dashboardBays.slice() : Object.keys(byBay);
+  if(!source.length){
     bars.innerHTML = '<div class="muted">No bay data</div>';
     return;
   }
-  const values = keys.map(k => Number(byBay[k] || 0));
-  const max = Math.max(...values, 1);
-  keys.sort((a,b)=>Number(a)-Number(b)).forEach(key => {
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    bar.style.height = (Number(byBay[key] || 0) / max * 120 + 8) + "px";
-    bar.title = `${bayLabel(key)} • ${formatMoney(byBay[key])}`;
-    bars.appendChild(bar);
 
-    const label = document.createElement("div");
-    label.className = "bar-label";
-    label.textContent = bayLabel(key).replace("Bay ", "");
-    labels.appendChild(label);
+  const values = source.map(key => Number(byBay[key] || 0));
+  const max = Math.max(...values, 1);
+  source.sort((a,b)=>Number(a)-Number(b)).forEach(key => {
+    const value = Number(byBay[key] || 0);
+    const width = value > 0 ? Math.max(6, (value / max) * 100) : 0;
+    const row = document.createElement("div");
+    row.className = "bay-performance-row";
+    row.title = `${bayLabel(key)} • ${formatMoney(value)}`;
+    row.innerHTML = `
+      <div class="bay-performance-label">${bayLabel(key)}</div>
+      <div class="bay-performance-track"><div class="bay-performance-fill" style="width:${width}%"></div></div>
+      <div class="bay-performance-value">${formatMoney(value)}</div>
+    `;
+    bars.appendChild(row);
   });
 }
 
@@ -962,6 +1014,7 @@ function renderForecast(transactions){
     return;
   }
   const now = new Date();
+  const validTransactions = transactions.filter(tx => tx.createdAt && String(tx.status || "").toLowerCase() !== "failed" && Number(tx.amount || 0) > 0);
   const totalsByDay = {};
   const daysBack = 7;
   for(let i = 0; i < daysBack; i += 1){
@@ -969,16 +1022,18 @@ function renderForecast(transactions){
     const key = d.toISOString().slice(0, 10);
     totalsByDay[key] = 0;
   }
-  transactions.forEach(tx => {
-    if(!tx.createdAt || String(tx.status || "").toLowerCase() === "failed"){
-      return;
-    }
+  validTransactions.forEach(tx => {
     const key = new Date(tx.createdAt).toISOString().slice(0, 10);
     if(key in totalsByDay){
       totalsByDay[key] += Number(tx.amount || 0);
     }
   });
   const dayKeys = Object.keys(totalsByDay);
+  const activeDayCount = dayKeys.filter(key => totalsByDay[key] > 0).length;
+  if(validTransactions.length < 3 || activeDayCount < 2){
+    list.innerHTML = '<div class="muted">Not enough data yet. Forecast starts after a few real top-ups across at least two days.</div>';
+    return;
+  }
   const total = dayKeys.reduce((sum, key) => sum + totalsByDay[key], 0);
   const avg = dayKeys.length ? total / dayKeys.length : 0;
   list.innerHTML = "";
@@ -1194,14 +1249,23 @@ function setupSettingsUI(){
     });
   }
 
-  const modeSelect = document.getElementById("bonusModeSelect");
-  if(modeSelect){
-    modeSelect.value = bonusMode;
-    modeSelect.addEventListener("change", () => {
-      bonusMode = modeSelect.value;
-      markSettingsDirty();
-    });
-  }
+	  const modeSelect = document.getElementById("bonusModeSelect");
+	  if(modeSelect){
+	    modeSelect.value = bonusMode;
+	    modeSelect.addEventListener("change", () => {
+	      bonusMode = modeSelect.value;
+	      markSettingsDirty();
+	    });
+	  }
+
+	  const displayModeSelect = document.getElementById("bonusDisplayModeSelect");
+	  if(displayModeSelect){
+	    displayModeSelect.value = bonusDisplayMode;
+	    displayModeSelect.addEventListener("change", () => {
+	      bonusDisplayMode = displayModeSelect.value;
+	      markSettingsDirty();
+	    });
+	  }
 
   const applyRec = document.getElementById("applyBonusRec");
   if(applyRec){
@@ -1262,11 +1326,15 @@ async function saveStaffAccessSettings(){
   const status = document.getElementById("staffAccessStatus");
   try{
     await resolveApiBase();
-    const payload = {
-      bonusEnabled,
-      bonusMode,
-      bonusPack,
-      bonusPacks,
+	    const liveBonusPack = bonusMode === "recommended" && latestRecommendation?.pack && latestRecommendation.enoughData !== false
+	      ? latestRecommendation.pack.pay
+	      : bonusPack;
+	    const payload = {
+	      bonusEnabled,
+	      bonusMode,
+	      bonusDisplayMode,
+	      bonusPack: liveBonusPack,
+	      bonusPacks,
       bays: dashboardBays,
       staffVisibility,
       pin: getAdminPin()
