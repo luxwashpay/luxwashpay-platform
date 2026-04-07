@@ -450,6 +450,14 @@ function formatDate(iso){
   return d.toLocaleString();
 }
 
+function toDateKey(date){
+  const d = new Date(date);
+  if(Number.isNaN(d.getTime())){
+    return "";
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 function bayLabel(value){
   if(!value){
     return "Bay";
