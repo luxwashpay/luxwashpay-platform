@@ -113,7 +113,7 @@ const defaultBonusPacks = parseBonusPacks(defaultBonusPacksEnv);
 
 function getDefaultSettings() {
   return {
-    bonusEnabled: true,
+    bonusEnabled: false,
     bonusMode: "manual",
     bonusPack: defaultBonusPacks[0]?.pay || 6,
     bonusPacks: defaultBonusPacks.length ? defaultBonusPacks : [{ pay: 6, credit: 7 }, { pay: 10, credit: 11 }, { pay: 20, credit: 23 }],
