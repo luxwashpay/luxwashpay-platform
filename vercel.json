@@ -1,21 +1,13 @@
 {
   "version": 2,
   "cleanUrls": false,
-  "redirects": [
-    {
-      "source": "/dashboard.html",
-      "destination": "/dashboard",
-      "permanent": true
-    },
-    {
-      "source": "/index.html",
-      "destination": "/",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/dashboard",
+      "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/dashboard/",
       "destination": "/dashboard/index.html"
     }
   ],
