@@ -53,9 +53,10 @@ const unipayTimeoutMs = Number(env("UNIPAY_TIMEOUT_MS", "15000"));
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const completedSessions = new Map();
 const appVersion = "2026-03-26-auth-auto-v2";
-const transactionsFile = path.join(__dirname, "data", "transactions.json");
+const runtimeDataDir = env("RUNTIME_DATA_DIR", process.env.VERCEL ? "/tmp/luxwash-data" : path.join(__dirname, "data"));
+const transactionsFile = path.join(runtimeDataDir, "transactions.json");
 let memoryTransactions = null;
-const settingsFile = path.join(__dirname, "data", "settings.json");
+const settingsFile = path.join(runtimeDataDir, "settings.json");
 let memorySettings = null;
 const settingsStore = env("SETTINGS_STORE", "file").toLowerCase();
 let stripeAccountCache = null;
@@ -225,10 +226,11 @@ async function writeSettings(settings) {
     }
   }
   try {
+    await fs.mkdir(path.dirname(settingsFile), { recursive: true });
     await fs.writeFile(settingsFile, JSON.stringify(settings, null, 2));
     memorySettings = null;
   } catch (error) {
-    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+    if (["ENOENT", "EROFS", "EACCES", "EPERM"].includes(error.code)) {
       memorySettings = settings;
       return;
     }
@@ -287,10 +289,11 @@ async function readTransactions() {
 
 async function writeTransactions(list) {
   try {
+    await fs.mkdir(path.dirname(transactionsFile), { recursive: true });
     await fs.writeFile(transactionsFile, JSON.stringify(list, null, 2));
     memoryTransactions = null;
   } catch (error) {
-    if (["EROFS", "EACCES", "EPERM"].includes(error.code)) {
+    if (["ENOENT", "EROFS", "EACCES", "EPERM"].includes(error.code)) {
       memoryTransactions = list;
       return;
     }
