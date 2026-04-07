@@ -62,6 +62,7 @@ const settingsStore = env("SETTINGS_STORE", "file").toLowerCase();
 let stripeAccountCache = null;
 let stripeAccountCacheAt = 0;
 const STRIPE_SETTINGS_CACHE_MS = 5 * 60 * 1000;
+const DASHBOARD_STRIPE_SESSION_LIMIT = Math.max(1, Math.min(1000, Number(env("DASHBOARD_STRIPE_SESSION_LIMIT", "500")) || 500));
 
 const dashboardAdminPin = env("DASHBOARD_ADMIN_PIN", "");
 const requireDashboardPin = dashboardAdminPin && dashboardAdminPin.length >= 3;
@@ -358,6 +359,106 @@ async function logTransaction(entry) {
   const transactions = await readTransactions();
   transactions.unshift(entry);
   await writeTransactions(transactions.slice(0, 1000));
+}
+
+function getCheckoutMetadata(session) {
+  const sessionMeta = session?.metadata || {};
+  const paymentIntentMeta = typeof session?.payment_intent === "object" && session.payment_intent?.metadata
+    ? session.payment_intent.metadata
+    : {};
+  return { ...paymentIntentMeta, ...sessionMeta };
+}
+
+async function readStripePaidTransactions() {
+  if (!stripe) {
+    return [];
+  }
+
+  try {
+    const allSessions = [];
+    let startingAfter;
+
+    do {
+      const page = await stripe.checkout.sessions.list({
+        limit: Math.min(100, Math.max(1, DASHBOARD_STRIPE_SESSION_LIMIT - allSessions.length)),
+        starting_after: startingAfter,
+        expand: ["data.payment_intent"],
+      });
+
+      allSessions.push(...page.data);
+      startingAfter = page.has_more && allSessions.length < DASHBOARD_STRIPE_SESSION_LIMIT
+        ? page.data[page.data.length - 1]?.id
+        : undefined;
+    } while (startingAfter);
+
+    return allSessions
+      .filter((session) => session.payment_status === "paid")
+      .map((session) => {
+        const meta = getCheckoutMetadata(session);
+        const amount = meta.topup_amount_charged
+          ? Number(meta.topup_amount_charged)
+          : meta.topup_amount
+            ? Number(meta.topup_amount)
+            : Number((session.amount_total || 0) / 100);
+        const creditAmount = meta.topup_amount_credit
+          ? Number(meta.topup_amount_credit)
+          : amount;
+        const bonusAmount = meta.bonus_amount
+          ? Number(meta.bonus_amount)
+          : Math.max(0, creditAmount - amount);
+
+        return {
+          id: `stripe_${session.id}`,
+          sessionId: session.id,
+          amount,
+          creditAmount,
+          bonusAmount,
+          boxNum: meta.box_num ? Number(meta.box_num) : null,
+          payId: meta.unipay_pay_id || null,
+          createdAt: new Date((session.created || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+          status: meta.unipay_status || "paid",
+          source: "stripe",
+        };
+      })
+      .filter((tx) => tx.boxNum);
+  } catch (_) {
+    return [];
+  }
+}
+
+function mergeTransactions(localTransactions, stripeTransactions) {
+  const merged = new Map();
+
+  stripeTransactions.forEach((tx) => {
+    merged.set(tx.sessionId || tx.id, tx);
+  });
+
+  localTransactions.forEach((tx) => {
+    const key = tx.sessionId || tx.id;
+    const existing = merged.get(key) || {};
+    merged.set(key, {
+      ...existing,
+      ...tx,
+      amount: tx.amount ?? existing.amount,
+      creditAmount: tx.creditAmount ?? existing.creditAmount,
+      bonusAmount: tx.bonusAmount ?? existing.bonusAmount,
+      source: existing.source ? `${existing.source}+local` : "local",
+    });
+  });
+
+  return Array.from(merged.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+async function readDashboardTransactions() {
+  const [localTransactions, stripeTransactions, settings] = await Promise.all([
+    readTransactions(),
+    readStripePaidTransactions(),
+    readSettings().catch(() => getDefaultSettings()),
+  ]);
+  const configuredBays = new Set(parseBays(settings?.bays || defaultBays).map(String));
+
+  return mergeTransactions(localTransactions, stripeTransactions)
+    .filter((tx) => !configuredBays.size || configuredBays.has(String(tx.boxNum)));
 }
 
 function assertConfigured() {
@@ -1016,6 +1117,9 @@ app.post("/api/topup/create-session", async (req, res) => {
       metadata: {
         box_num: String(boxNum),
         topup_amount: amountCharged.toFixed(2),
+        topup_amount_charged: amountCharged.toFixed(2),
+        topup_amount_credit: creditAmount.toFixed(2),
+        bonus_amount: bonusAmount.toFixed(2),
       },
       payment_intent_data: paymentIntentData,
     });
@@ -1039,16 +1143,29 @@ app.post("/api/topup/confirm", async (req, res) => {
       return res.json(completedSessions.get(sessionId));
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
     if (!session || session.payment_status !== "paid") {
       throw new Error("Payment is not confirmed yet");
     }
 
-    const amountChargedFromSession = session.metadata?.topup_amount_charged
-      ? Number(session.metadata.topup_amount_charged)
-      : Number((session.amount_total || 0) / 100);
-    const amountCreditFromSession = session.metadata?.topup_amount_credit
-      ? Number(session.metadata.topup_amount_credit)
+    const sessionMeta = session.metadata || {};
+    const paymentIntentMeta = typeof session.payment_intent === "object" && session.payment_intent?.metadata
+      ? session.payment_intent.metadata
+      : {};
+
+    const amountChargedFromSession = sessionMeta.topup_amount_charged
+      ? Number(sessionMeta.topup_amount_charged)
+      : paymentIntentMeta.topup_amount_charged
+        ? Number(paymentIntentMeta.topup_amount_charged)
+        : sessionMeta.topup_amount
+          ? Number(sessionMeta.topup_amount)
+          : Number((session.amount_total || 0) / 100);
+    const amountCreditFromSession = sessionMeta.topup_amount_credit
+      ? Number(sessionMeta.topup_amount_credit)
+      : paymentIntentMeta.topup_amount_credit
+        ? Number(paymentIntentMeta.topup_amount_credit)
       : amountChargedFromSession;
 
     const amountCharged = parseAmount(amountChargedFromSession);
@@ -1057,7 +1174,7 @@ app.post("/api/topup/confirm", async (req, res) => {
       creditAmount = amountCharged;
     }
     const bonusAmount = Math.max(0, creditAmount - amountCharged);
-    const boxNum = parseBoxNum(req.body?.boxNum ?? session.metadata?.box_num);
+    const boxNum = parseBoxNum(req.body?.boxNum ?? sessionMeta.box_num ?? paymentIntentMeta.box_num);
 
     await checkBoxAvailability(boxNum, creditAmount);
 
@@ -1115,7 +1232,7 @@ app.post("/api/topup/confirm", async (req, res) => {
 
 app.get("/api/dashboard/summary", async (_req, res) => {
   try {
-    const transactions = await readTransactions();
+    const transactions = await readDashboardTransactions();
     const filtered = applyFilters(transactions, _req.query);
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -1165,7 +1282,7 @@ app.get("/api/dashboard/summary", async (_req, res) => {
 
 app.get("/api/dashboard/transactions", async (req, res) => {
   try {
-    const transactions = await readTransactions();
+    const transactions = await readDashboardTransactions();
     const limit = Math.min(Number(req.query.limit || 50), 200);
     const filtered = applyFilters(transactions, req.query);
     res.json({ items: filtered.slice(0, limit) });
@@ -1176,7 +1293,7 @@ app.get("/api/dashboard/transactions", async (req, res) => {
 
 app.get("/api/dashboard/transactions.csv", async (_req, res) => {
   try {
-    const transactions = await readTransactions();
+    const transactions = await readDashboardTransactions();
     const filtered = applyFilters(transactions, _req.query);
     const headers = ["createdAt", "boxNum", "amount", "creditAmount", "bonusAmount", "payId", "status", "error", "sessionId"];
     const rows = [headers.join(",")];
@@ -1197,7 +1314,7 @@ app.get("/api/dashboard/transactions.csv", async (_req, res) => {
 
 app.get("/api/dashboard/alerts", async (req, res) => {
   try {
-    const transactions = await readTransactions();
+    const transactions = await readDashboardTransactions();
     const limit = Math.min(Number(req.query.limit || 20), 100);
     const filtered = applyFilters(transactions, req.query);
     const failed = filtered.filter((tx) => tx.status === "failed").slice(0, limit);
