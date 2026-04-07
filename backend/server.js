@@ -109,6 +109,38 @@ function parseBonusPacks(value) {
   return [];
 }
 
+function getDefaultStaffVisibility() {
+  return {
+    filters: true,
+    revenue: true,
+    charts: true,
+    bayPerformance: true,
+    forecasts: true,
+    heatmap: true,
+    alerts: true,
+    transactions: true,
+  };
+}
+
+function parseStaffVisibility(value) {
+  const defaults = getDefaultStaffVisibility();
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch (_) {
+      parsed = null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return defaults;
+  }
+  return Object.keys(defaults).reduce((next, key) => {
+    next[key] = typeof parsed[key] === "boolean" ? parsed[key] : defaults[key];
+    return next;
+  }, {});
+}
+
 const defaultBays = parseBays(defaultBaysEnv);
 const defaultBonusPacks = parseBonusPacks(defaultBonusPacksEnv);
 
@@ -119,6 +151,7 @@ function getDefaultSettings() {
     bonusPack: defaultBonusPacks[0]?.pay || 6,
     bonusPacks: defaultBonusPacks.length ? defaultBonusPacks : [{ pay: 6, credit: 7 }, { pay: 10, credit: 11 }, { pay: 20, credit: 23 }],
     bays: defaultBays.length ? defaultBays : [String(unipayDefaultBoxNum)],
+    staffVisibility: getDefaultStaffVisibility(),
   };
 }
 
@@ -150,6 +183,9 @@ function parseSettingsFromMetadata(meta) {
     if (bays.length) {
       next.bays = bays;
     }
+  }
+  if (meta.luxwash_staff_visibility) {
+    next.staffVisibility = parseStaffVisibility(meta.luxwash_staff_visibility);
   }
   return next;
 }
@@ -213,6 +249,7 @@ async function writeSettings(settings) {
         luxwash_bonus_pack: String(settings.bonusPack || ""),
         luxwash_bonus_packs: JSON.stringify(settings.bonusPacks || []),
         luxwash_bays: Array.isArray(settings.bays) ? settings.bays.join(",") : "",
+        luxwash_staff_visibility: JSON.stringify(parseStaffVisibility(settings.staffVisibility)),
       };
       const account = await getStripeAccount();
       if (account?.id) {
@@ -264,6 +301,9 @@ function sanitizeSettings(payload, current) {
     if (parsed.length) {
       next.bays = parsed;
     }
+  }
+  if (payload?.staffVisibility !== undefined) {
+    next.staffVisibility = parseStaffVisibility(payload.staffVisibility);
   }
   return next;
 }

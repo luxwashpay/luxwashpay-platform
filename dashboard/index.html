@@ -157,6 +157,14 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 .bonus-rec{font-size:0.9rem;color:var(--white);font-weight:600}
 .bonus-insight{padding:12px;border:1px solid var(--border);background:rgba(255,255,255,0.03);font-size:0.85rem;color:var(--muted)}
 .user-btn{border:1px solid var(--border);background:transparent;color:var(--muted);padding:6px 10px;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+.staff-hidden{display:none !important}
+.staff-option-list{display:grid;gap:8px;margin-top:8px}
+.staff-option{display:flex;gap:9px;align-items:flex-start;color:var(--muted);font-size:0.78rem;line-height:1.35}
+.staff-option input{margin-top:2px}
+.staff-option strong{display:block;color:var(--white);font-size:0.8rem;font-weight:600}
+.staff-option small{display:block;color:var(--muted-2);font-size:0.68rem;margin-top:2px}
+.staff-save-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.settings-note{font-size:0.68rem;color:var(--muted-2);margin-top:8px;line-height:1.5}
 
 .footer{margin-top:26px;color:var(--muted-2);font-size:0.7rem;text-align:center}
 </style>
@@ -195,7 +203,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
 
     <div class="status-strip" id="status-strip"></div>
 
-    <div class="filters">
+    <div class="filters" data-staff-section="filters">
       <div class="filter-group">
         <div class="filter-label">Bay</div>
         <select class="filter-select" id="filterBay">
@@ -215,7 +223,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       <button class="filter-btn" id="printDaily">Print Daily Report</button>
     </div>
 
-    <div class="kpi-row">
+    <div class="kpi-row" data-staff-section="revenue">
       <div class="kpi green">
         <div class="kpi-label">Today</div>
         <div class="kpi-value" id="kpi-today">£0.00</div>
@@ -238,7 +246,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid" data-staff-section="charts">
       <div class="card">
         <div class="card-title">Last 7 Days</div>
         <div class="chart-wrap" id="chart-bars"></div>
@@ -250,7 +258,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid" data-staff-section="bayPerformance">
       <div class="card span-2">
         <div class="card-title">Bay Performance (Totals)</div>
         <div class="chart-wrap" id="bay-bars"></div>
@@ -258,7 +266,7 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid" data-staff-section="forecasts">
       <div class="card">
         <div class="card-title">Revenue Forecast (Next 7 Days)</div>
         <div class="forecast-list" id="forecast-list"></div>
@@ -272,18 +280,18 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" data-staff-section="heatmap">
       <div class="card-title">Peak Hours Heatmap</div>
       <div class="heatmap" id="heatmap"></div>
       <div class="disclaimer">Not guaranteed — shows busiest hours based on recent top-ups.</div>
     </div>
 
-    <div class="card">
+    <div class="card" data-staff-section="alerts">
       <div class="card-title">Alerts</div>
       <div class="alerts" id="alerts-list"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-staff-section="transactions">
       <div class="card-title">Recent Transactions</div>
       <table class="table">
         <thead>
@@ -357,10 +365,45 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--white);mi
           <input class="filter-input" id="adminPinInput" placeholder="New admin PIN" />
           <button class="filter-btn" id="saveAdminPin" style="margin-top:10px">Save Admin PIN</button>
           <div class="filter-label" style="margin-top:18px">Staff Access</div>
-          <label style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.8rem">
-            <input type="checkbox" id="settingsStaffFilters" />
-            Allow staff to see filters + reports
-          </label>
+          <div class="staff-option-list" id="staffVisibilityOptions">
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="filters" />
+              <span><strong>Filters + print report</strong><small>Bay/date filters and daily report button.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="revenue" />
+              <span><strong>Revenue totals</strong><small>Today, week, month and all-time money cards.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="charts" />
+              <span><strong>Last 7 days + bay totals</strong><small>Sales trend chart and totals by bay.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="bayPerformance" />
+              <span><strong>Bay performance totals</strong><small>Detailed performance comparison across bays.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="forecasts" />
+              <span><strong>Forecast + top-up demand</strong><small>Predicted revenue and demand insight cards.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="heatmap" />
+              <span><strong>Peak hours heatmap</strong><small>Busiest hour prediction grid.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="alerts" />
+              <span><strong>Alerts</strong><small>Machine start failures and bay warnings.</small></span>
+            </label>
+            <label class="staff-option">
+              <input type="checkbox" data-staff-toggle="transactions" />
+              <span><strong>Recent transactions + export</strong><small>Transaction table, pay IDs, CSV and print export.</small></span>
+            </label>
+          </div>
+          <div class="staff-save-row">
+            <button class="filter-btn" id="saveStaffAccess" type="button">Save Staff Access</button>
+            <span class="settings-note" id="staffAccessStatus"></span>
+          </div>
+          <div class="settings-note">Owner always sees everything. Staff only see the sections ticked above.</div>
         </div>
       </div>
     </div>
@@ -394,6 +437,7 @@ let apiReadyPromise = null;
 const DEFAULT_ADMIN_PIN = window.LUXWASH_DASH_PIN || "1111";
 const LOGO_URL = window.LUXWASH_LOGO_URL || "";
 const SETTINGS_STAFF_FILTERS_KEY = "luxwash_dashboard_staff_filters";
+const SETTINGS_STAFF_VISIBILITY_KEY = "luxwash_dashboard_staff_visibility";
 const DEFAULT_BAYS = ["260529", "260530", "260531", "260532", "260533"];
 const DEFAULT_MINUTES = Number(window.LUXWASH_BAY_ALERT_MINUTES || 60);
 const DEFAULT_BONUS_PACKS = [
@@ -404,6 +448,17 @@ const DEFAULT_BONUS_PACKS = [
 let dashboardBays = DEFAULT_BAYS.slice();
 let bayAlertMinutes = DEFAULT_MINUTES;
 let staffFiltersEnabled = true;
+const DEFAULT_STAFF_VISIBILITY = {
+  filters: true,
+  revenue: true,
+  charts: true,
+  bayPerformance: true,
+  forecasts: true,
+  heatmap: true,
+  alerts: true,
+  transactions: true,
+};
+let staffVisibility = { ...DEFAULT_STAFF_VISIBILITY };
 let bonusEnabled = false;
 let bonusMode = "manual";
 let bonusPack = DEFAULT_BONUS_PACKS[0].pay;
@@ -469,9 +524,37 @@ function bayLabel(value){
   return `Bay ${value}`;
 }
 
+function normalizeStaffVisibility(value){
+  let parsed = value;
+  if(typeof value === "string"){
+    try{
+      parsed = JSON.parse(value);
+    }catch(e){
+      parsed = null;
+    }
+  }
+  if(!parsed || typeof parsed !== "object" || Array.isArray(parsed)){
+    return { ...DEFAULT_STAFF_VISIBILITY };
+  }
+  return Object.keys(DEFAULT_STAFF_VISIBILITY).reduce((next, key) => {
+    next[key] = typeof parsed[key] === "boolean" ? parsed[key] : DEFAULT_STAFF_VISIBILITY[key];
+    return next;
+  }, {});
+}
+
+function saveStaffVisibilityLocal(){
+  localStorage.setItem(SETTINGS_STAFF_VISIBILITY_KEY, JSON.stringify(staffVisibility));
+  localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, String(staffVisibility.filters !== false));
+}
+
 function loadSettings(){
+  const storedStaffVisibility = localStorage.getItem(SETTINGS_STAFF_VISIBILITY_KEY);
+  staffVisibility = normalizeStaffVisibility(storedStaffVisibility);
   const storedStaffFilters = localStorage.getItem(SETTINGS_STAFF_FILTERS_KEY);
-  staffFiltersEnabled = storedStaffFilters === null ? true : storedStaffFilters === "true";
+  if(storedStaffVisibility === null && storedStaffFilters !== null){
+    staffVisibility.filters = storedStaffFilters === "true";
+  }
+  staffFiltersEnabled = staffVisibility.filters !== false;
 }
 
 function applyRemoteSettings(settings){
@@ -495,6 +578,11 @@ function applyRemoteSettings(settings){
   }
   if(Array.isArray(settings.bays) && settings.bays.length){
     dashboardBays = settings.bays.map(String);
+  }
+  if(settings.staffVisibility){
+    staffVisibility = normalizeStaffVisibility(settings.staffVisibility);
+    staffFiltersEnabled = staffVisibility.filters !== false;
+    saveStaffVisibilityLocal();
   }
   settingsDirty = false;
 }
@@ -747,6 +835,7 @@ async function saveBonusSettings(){
       bonusPack,
       bonusPacks,
       bays: dashboardBays,
+      staffVisibility,
       pin: getAdminPin()
     };
     const res = await fetchJson(API_BASE_URL + "/api/settings", {
@@ -1093,15 +1182,7 @@ function buildQuery(){
 }
 
 function setupSettingsUI(){
-  const staffToggle = document.getElementById("settingsStaffFilters");
-  if(staffToggle){
-    staffToggle.checked = staffFiltersEnabled;
-    staffToggle.addEventListener("change", () => {
-      staffFiltersEnabled = staffToggle.checked;
-      localStorage.setItem(SETTINGS_STAFF_FILTERS_KEY, String(staffFiltersEnabled));
-      applyRole();
-    });
-  }
+  renderStaffVisibilityControls();
 
   const bonusToggle = document.getElementById("bonusEnabledToggle");
   if(bonusToggle){
@@ -1149,12 +1230,71 @@ function setupSettingsUI(){
   }
 }
 
+function renderStaffVisibilityControls(){
+  document.querySelectorAll("[data-staff-toggle]").forEach((input) => {
+    const key = input.getAttribute("data-staff-toggle");
+    input.checked = staffVisibility[key] !== false;
+    input.addEventListener("change", () => {
+      staffVisibility = { ...staffVisibility, [key]: input.checked };
+      staffFiltersEnabled = staffVisibility.filters !== false;
+      saveStaffVisibilityLocal();
+      settingsDirty = true;
+      applyRole();
+      const status = document.getElementById("staffAccessStatus");
+      if(status) status.textContent = "Unsaved change";
+    });
+  });
+
+  const saveBtn = document.getElementById("saveStaffAccess");
+  if(saveBtn){
+    saveBtn.addEventListener("click", saveStaffAccessSettings);
+  }
+}
+
+function renderStaffVisibilityControlsState(){
+  document.querySelectorAll("[data-staff-toggle]").forEach((input) => {
+    const key = input.getAttribute("data-staff-toggle");
+    input.checked = staffVisibility[key] !== false;
+  });
+}
+
+async function saveStaffAccessSettings(){
+  const status = document.getElementById("staffAccessStatus");
+  try{
+    await resolveApiBase();
+    const payload = {
+      bonusEnabled,
+      bonusMode,
+      bonusPack,
+      bonusPacks,
+      bays: dashboardBays,
+      staffVisibility,
+      pin: getAdminPin()
+    };
+    const res = await fetchJson(API_BASE_URL + "/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    applyRemoteSettings(res);
+    updateBonusControls();
+    renderStaffVisibilityControlsState();
+    applyRole();
+    settingsDirty = false;
+    if(status) status.textContent = "Saved";
+  }catch(e){
+    if(status) status.textContent = "Could not save: " + e.message;
+  }
+}
+
 async function loadDashboard(){
   try {
     await resolveApiBase();
     if(!settingsDirty){
       await loadRemoteSettings();
       updateBonusControls();
+      renderStaffVisibilityControlsState();
+      applyRole();
     }
     const query = buildQuery();
     const summary = await fetchJson(API_BASE_URL + "/api/dashboard/summary" + query);
@@ -1261,15 +1401,11 @@ function applyRole(){
     usersCard.style.display = "block";
     if(bonusCard) bonusCard.style.display = "block";
   }
-  const filters = document.querySelector(".filters");
-  const actions = document.querySelector(".actions");
-  if(role === "staff" && !staffFiltersEnabled){
-    if(filters) filters.style.display = "none";
-    if(actions) actions.style.display = "none";
-  } else {
-    if(filters) filters.style.display = "flex";
-    if(actions) actions.style.display = "flex";
-  }
+  document.querySelectorAll("[data-staff-section]").forEach((section) => {
+    const key = section.getAttribute("data-staff-section");
+    const shouldHide = role === "staff" && staffVisibility[key] === false;
+    section.classList.toggle("staff-hidden", shouldHide);
+  });
 }
 
 if(localStorage.getItem("luxwash_dash_unlocked") === "true"){
