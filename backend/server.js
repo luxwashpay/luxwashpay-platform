@@ -12,6 +12,38 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 app.use(cors());
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  try {
+    assertConfigured();
+
+    if (!stripeWebhookSecret) {
+      return res.status(400).send("STRIPE_WEBHOOK_SECRET is not configured");
+    }
+
+    const signature = req.headers["stripe-signature"];
+    if (!signature) {
+      return res.status(400).send("Missing Stripe signature");
+    }
+
+    const event = stripe.webhooks.constructEvent(req.body, signature, stripeWebhookSecret);
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
+      const webhookSession = event.data?.object;
+      const sessionId = webhookSession?.id;
+      if (sessionId) {
+        await withSessionLock(sessionId, () => completePaidSession({
+          sessionId,
+          session: webhookSession,
+          source: "webhook",
+        }));
+      }
+    }
+
+    return res.json({ received: true });
+  } catch (error) {
+    console.error("[stripe-webhook] failed", error);
+    return res.status(400).send(error.message || "Webhook failed");
+  }
+});
 app.use(express.json());
 app.use((req, res, next) => {
   if (req.path && req.path.startsWith("/api/")) {
@@ -28,6 +60,7 @@ const env = (name, fallback = "") => {
 const port = Number(env("PORT", "3000"));
 const host = env("HOST", "127.0.0.1");
 const stripeSecretKey = env("STRIPE_SECRET_KEY");
+const stripeWebhookSecret = env("STRIPE_WEBHOOK_SECRET");
 const stripeCurrency = env("STRIPE_CURRENCY", "gbp");
 const stripeConnectAccountId = env("STRIPE_CONNECT_ACCOUNT_ID");
 const platformFeePence = Number(env("PLATFORM_FEE_PENCE", "50"));
@@ -52,6 +85,7 @@ const unipayTimeoutMs = Number(env("UNIPAY_TIMEOUT_MS", "15000"));
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const completedSessions = new Map();
+const sessionProcessing = new Map();
 const appVersion = "2026-03-26-auth-auto-v2";
 const runtimeDataDir = env("RUNTIME_DATA_DIR", process.env.VERCEL ? "/tmp/luxwash-data" : path.join(__dirname, "data"));
 const transactionsFile = path.join(runtimeDataDir, "transactions.json");
@@ -73,6 +107,22 @@ let tokenCache = { value: "", expiresAt: 0 };
 let autoAuthStrategyName = "";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function withSessionLock(sessionId, factory) {
+  if (!sessionId) {
+    return factory();
+  }
+  if (sessionProcessing.has(sessionId)) {
+    return sessionProcessing.get(sessionId);
+  }
+  const pending = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      sessionProcessing.delete(sessionId);
+    });
+  sessionProcessing.set(sessionId, pending);
+  return pending;
+}
 
 function parseBays(value) {
   if (Array.isArray(value)) {
@@ -416,8 +466,186 @@ function sumAmounts(list) {
 
 async function logTransaction(entry) {
   const transactions = await readTransactions();
-  transactions.unshift(entry);
+  const key = entry.sessionId || entry.id;
+  const existingIndex = key
+    ? transactions.findIndex((item) => (item.sessionId || item.id) === key)
+    : -1;
+  if (existingIndex >= 0) {
+    transactions[existingIndex] = { ...transactions[existingIndex], ...entry };
+  } else {
+    transactions.unshift(entry);
+  }
   await writeTransactions(transactions.slice(0, 1000));
+}
+
+async function updateStripeSessionMetadata(sessionId, metadata) {
+  if (!stripe || !sessionId || !metadata || typeof metadata !== "object") {
+    return;
+  }
+  const nextMetadata = Object.entries(metadata).reduce((acc, [key, value]) => {
+    if (value === undefined || value === null) {
+      return acc;
+    }
+    acc[key] = String(value);
+    return acc;
+  }, {});
+  if (!Object.keys(nextMetadata).length) {
+    return;
+  }
+  try {
+    await stripe.checkout.sessions.update(sessionId, { metadata: nextMetadata });
+  } catch (error) {
+    console.error("[stripe-session-update] failed", { sessionId, error: String(error?.message || error) });
+  }
+}
+
+async function findLoggedTransaction(sessionId) {
+  if (!sessionId) {
+    return null;
+  }
+  const transactions = await readTransactions();
+  return transactions.find((item) => (item.sessionId || item.id) === sessionId) || null;
+}
+
+function buildCompletedResult(transaction) {
+  return {
+    ok: true,
+    sessionId: transaction.sessionId,
+    amount: Number(transaction.amount || 0),
+    creditAmount: Number(transaction.creditAmount || transaction.amount || 0),
+    bonusAmount: Number(transaction.bonusAmount || 0),
+    boxNum: transaction.boxNum,
+    payId: transaction.payId,
+    unipayStatus: transaction.unipayStatus || { status: 2 },
+  };
+}
+
+async function completePaidSession({ sessionId, session, source = "confirm" }) {
+  if (!sessionId) {
+    throw new Error("sessionId is required");
+  }
+
+  if (completedSessions.has(sessionId)) {
+    return completedSessions.get(sessionId);
+  }
+
+  const existingTransaction = await findLoggedTransaction(sessionId);
+  if (existingTransaction?.status === "started") {
+    const result = buildCompletedResult(existingTransaction);
+    completedSessions.set(sessionId, result);
+    return result;
+  }
+  if (existingTransaction?.status === "failed") {
+    throw new Error(existingTransaction.error || "Machine start failed");
+  }
+
+  let checkoutSession = session;
+  if (
+    !checkoutSession ||
+    checkoutSession.payment_status !== "paid" ||
+    typeof checkoutSession.payment_intent !== "object"
+  ) {
+    checkoutSession = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+  }
+
+  if (!checkoutSession || checkoutSession.payment_status !== "paid") {
+    throw new Error("Payment is not confirmed yet");
+  }
+
+  const meta = getCheckoutMetadata(checkoutSession);
+  const amountChargedFromSession = meta.topup_amount_charged
+    ? Number(meta.topup_amount_charged)
+    : meta.topup_amount
+      ? Number(meta.topup_amount)
+      : Number((checkoutSession.amount_total || 0) / 100);
+  const amountCreditFromSession = meta.topup_amount_credit
+    ? Number(meta.topup_amount_credit)
+    : amountChargedFromSession;
+
+  const amountCharged = parseAmount(amountChargedFromSession);
+  let creditAmount = parseAmount(amountCreditFromSession);
+  if (creditAmount < amountCharged) {
+    creditAmount = amountCharged;
+  }
+  const bonusAmount = Math.max(0, creditAmount - amountCharged);
+  const boxNum = parseBoxNum(meta.box_num);
+
+  await checkBoxAvailability(boxNum, creditAmount);
+
+  let payment;
+  let statusPayload;
+
+  try {
+    payment = await registerUnipayPayment(boxNum, creditAmount);
+    await acknowledgeUnipayPayment(payment.payId);
+    statusPayload = await waitForUnipayStatus(payment.payId);
+  } catch (error) {
+    const errorMessage = error.message || "Machine start failed";
+    await updateStripeSessionMetadata(sessionId, {
+      box_num: String(boxNum),
+      topup_amount_charged: amountCharged.toFixed(2),
+      topup_amount_credit: creditAmount.toFixed(2),
+      bonus_amount: bonusAmount.toFixed(2),
+      unipay_status: "failed",
+      unipay_pay_id: payment?.payId ?? "",
+      unipay_error: errorMessage,
+      last_start_source: source,
+    });
+    await logTransaction({
+      id: `tx_${sessionId}`,
+      sessionId,
+      amount: amountCharged,
+      creditAmount,
+      bonusAmount,
+      boxNum,
+      payId: payment?.payId ?? null,
+      createdAt: new Date().toISOString(),
+      status: "failed",
+      error: errorMessage,
+      startSource: source,
+    });
+    throw error;
+  }
+
+  const result = {
+    ok: true,
+    sessionId,
+    amount: amountCharged,
+    creditAmount,
+    bonusAmount,
+    boxNum,
+    payId: payment.payId,
+    unipayStatus: statusPayload,
+  };
+
+  await updateStripeSessionMetadata(sessionId, {
+    box_num: String(boxNum),
+    topup_amount_charged: amountCharged.toFixed(2),
+    topup_amount_credit: creditAmount.toFixed(2),
+    bonus_amount: bonusAmount.toFixed(2),
+    unipay_status: "started",
+    unipay_pay_id: payment.payId,
+    unipay_error: "",
+    last_start_source: source,
+  });
+  await logTransaction({
+    id: `tx_${sessionId}`,
+    sessionId,
+    amount: amountCharged,
+    creditAmount,
+    bonusAmount,
+    boxNum,
+    payId: payment.payId,
+    createdAt: new Date().toISOString(),
+    status: "started",
+    startSource: source,
+    unipayStatus: statusPayload,
+  });
+
+  completedSessions.set(sessionId, result);
+  return result;
 }
 
 function getCheckoutMetadata(session) {
@@ -476,6 +704,7 @@ async function readStripePaidTransactions() {
           payId: meta.unipay_pay_id || null,
           createdAt: new Date((session.created || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
           status: meta.unipay_status || "paid",
+          error: meta.unipay_error || "",
           source: "stripe",
         };
       })
@@ -1139,8 +1368,8 @@ app.post("/api/topup/create-session", async (req, res) => {
 
     const baseUrl = resolvePublicBaseUrl(req);
     const topupPath = resolveTopupPath();
-    const successUrl = `${baseUrl}${topupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}${topupPath}?payment=cancelled`;
+    const successUrl = `${baseUrl}${topupPath}?payment=success&session_id={CHECKOUT_SESSION_ID}&box_num=${boxNum}`;
+    const cancelUrl = `${baseUrl}${topupPath}?payment=cancelled&box_num=${boxNum}`;
 
     const paymentIntentData = {
       metadata: {
@@ -1180,6 +1409,7 @@ app.post("/api/topup/create-session", async (req, res) => {
         topup_amount_credit: creditAmount.toFixed(2),
         bonus_amount: bonusAmount.toFixed(2),
       },
+      client_reference_id: String(boxNum),
       payment_intent_data: paymentIntentData,
     });
 
@@ -1198,91 +1428,9 @@ app.post("/api/topup/confirm", async (req, res) => {
       throw new Error("sessionId is required");
     }
 
-    if (completedSessions.has(sessionId)) {
-      return res.json(completedSessions.get(sessionId));
-    }
-
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["payment_intent"],
-    });
-    if (!session || session.payment_status !== "paid") {
-      throw new Error("Payment is not confirmed yet");
-    }
-
-    const sessionMeta = session.metadata || {};
-    const paymentIntentMeta = typeof session.payment_intent === "object" && session.payment_intent?.metadata
-      ? session.payment_intent.metadata
-      : {};
-
-    const amountChargedFromSession = sessionMeta.topup_amount_charged
-      ? Number(sessionMeta.topup_amount_charged)
-      : paymentIntentMeta.topup_amount_charged
-        ? Number(paymentIntentMeta.topup_amount_charged)
-        : sessionMeta.topup_amount
-          ? Number(sessionMeta.topup_amount)
-          : Number((session.amount_total || 0) / 100);
-    const amountCreditFromSession = sessionMeta.topup_amount_credit
-      ? Number(sessionMeta.topup_amount_credit)
-      : paymentIntentMeta.topup_amount_credit
-        ? Number(paymentIntentMeta.topup_amount_credit)
-      : amountChargedFromSession;
-
-    const amountCharged = parseAmount(amountChargedFromSession);
-    let creditAmount = parseAmount(amountCreditFromSession);
-    if (creditAmount < amountCharged) {
-      creditAmount = amountCharged;
-    }
-    const bonusAmount = Math.max(0, creditAmount - amountCharged);
-    const boxNum = parseBoxNum(req.body?.boxNum ?? sessionMeta.box_num ?? paymentIntentMeta.box_num);
-
-    await checkBoxAvailability(boxNum, creditAmount);
-
-    let payment;
-    let statusPayload;
-    try {
-      payment = await registerUnipayPayment(boxNum, creditAmount);
-      await acknowledgeUnipayPayment(payment.payId);
-      statusPayload = await waitForUnipayStatus(payment.payId);
-    } catch (error) {
-      await logTransaction({
-        id: `tx_${sessionId}`,
-        sessionId,
-        amount: amountCharged,
-        creditAmount,
-        bonusAmount,
-        boxNum,
-        payId: payment?.payId ?? null,
-        createdAt: new Date().toISOString(),
-        status: "failed",
-        error: error.message,
-      });
-      throw error;
-    }
-
-    const result = {
-      ok: true,
-      sessionId,
-      amount: amountCharged,
-      creditAmount,
-      bonusAmount,
-      boxNum,
-      payId: payment.payId,
-      unipayStatus: statusPayload,
-    };
-
-    await logTransaction({
-      id: `tx_${sessionId}`,
-      sessionId,
-      amount: amountCharged,
-      creditAmount,
-      bonusAmount,
-      boxNum,
-      payId: payment.payId,
-      createdAt: new Date().toISOString(),
-      status: "started",
-    });
-
-    completedSessions.set(sessionId, result);
+    const result = await withSessionLock(sessionId, () =>
+      completePaidSession({ sessionId, source: "confirm" }),
+    );
     return res.json(result);
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to complete top-up" });
