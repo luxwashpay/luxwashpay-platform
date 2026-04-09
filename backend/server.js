@@ -829,6 +829,39 @@ function mergeTransactions(localTransactions, stripeTransactions) {
   return Array.from(merged.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+function getUnresolvedFailedTransactions(transactions, limit = 20) {
+  const all = Array.isArray(transactions) ? transactions : [];
+  const resolutionWindowMs = 15 * 60 * 1000;
+
+  return all
+    .filter((tx) => tx.status === "failed")
+    .filter((failedTx) => {
+      const failedAt = new Date(failedTx.createdAt).getTime();
+      if (!Number.isFinite(failedAt)) {
+        return true;
+      }
+
+      const resolved = all.some((candidate) => {
+        if (String(candidate.boxNum || "") !== String(failedTx.boxNum || "")) {
+          return false;
+        }
+        if (candidate.status !== "started" && candidate.status !== "paid") {
+          return false;
+        }
+
+        const candidateAt = new Date(candidate.createdAt).getTime();
+        if (!Number.isFinite(candidateAt)) {
+          return false;
+        }
+
+        return candidateAt > failedAt && candidateAt - failedAt <= resolutionWindowMs;
+      });
+
+      return !resolved;
+    })
+    .slice(0, limit);
+}
+
 async function readDashboardTransactions() {
   const [localTransactions, stripeTransactions, settings] = await Promise.all([
     readTransactions(),
@@ -1616,7 +1649,7 @@ app.get("/api/dashboard/alerts", async (req, res) => {
     const transactions = await readDashboardTransactions();
     const limit = Math.min(Number(req.query.limit || 20), 100);
     const filtered = applyFilters(transactions, req.query);
-    const failed = filtered.filter((tx) => tx.status === "failed").slice(0, limit);
+    const failed = getUnresolvedFailedTransactions(filtered, limit);
     res.json({ items: failed });
   } catch (error) {
     res.status(500).json({ error: error.message || "Unable to load alerts" });
