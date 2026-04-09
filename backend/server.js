@@ -520,6 +520,68 @@ function buildCompletedResult(transaction) {
   };
 }
 
+function getResultFromMetadata(sessionId, meta) {
+  if (!meta || typeof meta !== "object") {
+    return null;
+  }
+
+  const status = String(meta.unipay_status || "").toLowerCase();
+  if (!status) {
+    return null;
+  }
+
+  const amount = meta.topup_amount_charged ? Number(meta.topup_amount_charged) : null;
+  const creditAmount = meta.topup_amount_credit ? Number(meta.topup_amount_credit) : amount;
+  const bonusAmount = meta.bonus_amount ? Number(meta.bonus_amount) : Math.max(0, Number(creditAmount || 0) - Number(amount || 0));
+  const boxNum = meta.box_num ? Number(meta.box_num) : null;
+  const payId = meta.unipay_pay_id ? Number(meta.unipay_pay_id) : null;
+
+  if (status === "started") {
+    return {
+      type: "started",
+      result: {
+        ok: true,
+        sessionId,
+        amount: Number.isFinite(amount) ? amount : 0,
+        creditAmount: Number.isFinite(creditAmount) ? creditAmount : Number.isFinite(amount) ? amount : 0,
+        bonusAmount: Number.isFinite(bonusAmount) ? bonusAmount : 0,
+        boxNum,
+        payId,
+        unipayStatus: { status: 2, source: "stripe_metadata" },
+      },
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      type: "failed",
+      error: meta.unipay_error || "Machine start failed",
+    };
+  }
+
+  if (status === "processing") {
+    return { type: "processing" };
+  }
+
+  return null;
+}
+
+async function waitForStripeOutcome(sessionId, attempts = 5, delayMs = 900) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+    const outcome = getResultFromMetadata(sessionId, getCheckoutMetadata(session));
+    if (outcome && outcome.type !== "processing") {
+      return outcome;
+    }
+    if (attempt < attempts - 1) {
+      await delay(delayMs);
+    }
+  }
+  return null;
+}
+
 async function completePaidSession({ sessionId, session, source = "confirm" }) {
   if (!sessionId) {
     throw new Error("sessionId is required");
@@ -530,14 +592,6 @@ async function completePaidSession({ sessionId, session, source = "confirm" }) {
   }
 
   const existingTransaction = await findLoggedTransaction(sessionId);
-  if (existingTransaction?.status === "started") {
-    const result = buildCompletedResult(existingTransaction);
-    completedSessions.set(sessionId, result);
-    return result;
-  }
-  if (existingTransaction?.status === "failed") {
-    throw new Error(existingTransaction.error || "Machine start failed");
-  }
 
   let checkoutSession = session;
   if (
@@ -555,6 +609,35 @@ async function completePaidSession({ sessionId, session, source = "confirm" }) {
   }
 
   const meta = getCheckoutMetadata(checkoutSession);
+  const metadataOutcome = getResultFromMetadata(sessionId, meta);
+  if (metadataOutcome?.type === "started") {
+    completedSessions.set(sessionId, metadataOutcome.result);
+    return metadataOutcome.result;
+  }
+  if (metadataOutcome?.type === "failed") {
+    throw new Error(metadataOutcome.error);
+  }
+
+  if (existingTransaction?.status === "started") {
+    const result = buildCompletedResult(existingTransaction);
+    completedSessions.set(sessionId, result);
+    return result;
+  }
+  if (existingTransaction?.status === "failed" && source !== "confirm") {
+    throw new Error(existingTransaction.error || "Machine start failed");
+  }
+
+  if (source === "confirm") {
+    const awaitedOutcome = await waitForStripeOutcome(sessionId);
+    if (awaitedOutcome?.type === "started") {
+      completedSessions.set(sessionId, awaitedOutcome.result);
+      return awaitedOutcome.result;
+    }
+    if (awaitedOutcome?.type === "failed") {
+      throw new Error(awaitedOutcome.error);
+    }
+  }
+
   const amountChargedFromSession = meta.topup_amount_charged
     ? Number(meta.topup_amount_charged)
     : meta.topup_amount
@@ -573,6 +656,15 @@ async function completePaidSession({ sessionId, session, source = "confirm" }) {
   const boxNum = parseBoxNum(meta.box_num);
 
   await checkBoxAvailability(boxNum, creditAmount);
+  await updateStripeSessionMetadata(sessionId, {
+    box_num: String(boxNum),
+    topup_amount_charged: amountCharged.toFixed(2),
+    topup_amount_credit: creditAmount.toFixed(2),
+    bonus_amount: bonusAmount.toFixed(2),
+    unipay_status: "processing",
+    unipay_error: "",
+    last_start_source: source,
+  });
 
   let payment;
   let statusPayload;
