@@ -832,6 +832,8 @@ function mergeTransactions(localTransactions, stripeTransactions) {
 function getUnresolvedFailedTransactions(transactions, limit = 20) {
   const all = Array.isArray(transactions) ? transactions : [];
   const resolutionWindowMs = 15 * 60 * 1000;
+  const activeAlertWindowMs = 30 * 60 * 1000;
+  const now = Date.now();
 
   return all
     .filter((tx) => tx.status === "failed")
@@ -839,6 +841,10 @@ function getUnresolvedFailedTransactions(transactions, limit = 20) {
       const failedAt = new Date(failedTx.createdAt).getTime();
       if (!Number.isFinite(failedAt)) {
         return true;
+      }
+
+      if (now - failedAt > activeAlertWindowMs) {
+        return false;
       }
 
       const resolved = all.some((candidate) => {
