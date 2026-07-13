@@ -72,8 +72,8 @@ export default function SchoolDashboard() {
         .in("status", ["confirmed", "completed"]);
 
       if (bookings) {
-        setMonthRevenue(bookings.reduce((s, b) => s + b.price, 0));
-        setMonthFees(bookings.reduce((s, b) => s + b.platform_fee, 0));
+        setMonthRevenue(bookings.reduce((sum: number, booking: any) => sum + booking.price, 0));
+        setMonthFees(bookings.reduce((sum: number, booking: any) => sum + booking.platform_fee, 0));
         setMonthLessons(bookings.length);
       }
 
@@ -95,7 +95,7 @@ export default function SchoolDashboard() {
 
         weeks.push({
           week: `W${8 - i}`,
-          revenue: weekBookings?.reduce((s, b) => s + b.price, 0) || 0,
+          revenue: weekBookings?.reduce((sum: number, booking: any) => sum + booking.price, 0) || 0,
         });
       }
       setChartData(weeks);

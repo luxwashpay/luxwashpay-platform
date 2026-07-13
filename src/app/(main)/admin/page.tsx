@@ -104,8 +104,8 @@ export default function AdminDashboard() {
       ]);
 
       if (bookings) {
-        setTotalRevenue(bookings.reduce((s, b) => s + b.price, 0));
-        setTotalFees(bookings.reduce((s, b) => s + b.platform_fee, 0));
+        setTotalRevenue(bookings.reduce((sum: number, booking: any) => sum + booking.price, 0));
+        setTotalFees(bookings.reduce((sum: number, booking: any) => sum + booking.platform_fee, 0));
         setRecentBookings(bookings);
       }
 
@@ -137,14 +137,14 @@ export default function AdminDashboard() {
         const end = new Date(start);
         end.setDate(end.getDate() + 7);
 
-        const weekBookings = (bookings || []).filter((b) => {
+        const weekBookings = (bookings || []).filter((b: any) => {
           const d = new Date(b.created_at);
           return d >= start && d < end;
         });
 
         weeks.push({
           week: `W${12 - i}`,
-          revenue: weekBookings.reduce((s: number, b: any) => s + b.platform_fee, 0),
+          revenue: weekBookings.reduce((sum: number, booking: any) => sum + booking.platform_fee, 0),
         });
       }
       setChartData(weeks);
