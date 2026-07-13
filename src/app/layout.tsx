@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Site currently unavailable",
-  description: "This site is temporarily unavailable while maintenance is in progress.",
+  title: "Service not available",
+  description: "This payment service is currently unavailable.",
 };
 
 export const viewport: Viewport = {
